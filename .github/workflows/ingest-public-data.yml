@@ -1,0 +1,39 @@
+name: Ingest public subway data
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_month:
+        description: "YYYYMM month for Seoul CardSubwayTime"
+        required: false
+  schedule:
+    - cron: "15 19 5 * *"
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:ingest
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          TARGET_LINE_NO: "3"
+          TARGET_MONTH: ${{ inputs.target_month }}
+          TRANSFER_CSV_URL: ${{ secrets.TRANSFER_CSV_URL }}
+          TRANSFER_API_URL_TEMPLATE: ${{ secrets.TRANSFER_API_URL_TEMPLATE }}
+          FAST_EXIT_API_URL_TEMPLATE: ${{ secrets.FAST_EXIT_API_URL_TEMPLATE }}
+          TRAIN_OPERATION_CSV_URL: ${{ secrets.TRAIN_OPERATION_CSV_URL }}
+          TRAIN_OPERATION_API_URL_TEMPLATE: ${{ secrets.TRAIN_OPERATION_API_URL_TEMPLATE }}
+          CONGESTION_CSV_URL: ${{ secrets.CONGESTION_CSV_URL }}
+          CONGESTION_API_URL_TEMPLATE: ${{ secrets.CONGESTION_API_URL_TEMPLATE }}
+          LINE3_UP_DIRECTION: ${{ secrets.LINE3_UP_DIRECTION }}
+          LINE3_DOWN_DIRECTION: ${{ secrets.LINE3_DOWN_DIRECTION }}
+
