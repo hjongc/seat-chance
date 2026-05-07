@@ -24,7 +24,9 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
+          SEOUL_REALTIME_SUBWAY_API_KEY: ${{ secrets.SEOUL_REALTIME_SUBWAY_API_KEY }}
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           TARGET_LINE_NO: "3"
           TARGET_MONTH: ${{ inputs.target_month }}
           TRANSFER_CSV_URL: ${{ secrets.TRANSFER_CSV_URL }}
@@ -36,4 +38,3 @@ jobs:
           CONGESTION_API_URL_TEMPLATE: ${{ secrets.CONGESTION_API_URL_TEMPLATE }}
           LINE3_UP_DIRECTION: ${{ secrets.LINE3_UP_DIRECTION }}
           LINE3_DOWN_DIRECTION: ${{ secrets.LINE3_DOWN_DIRECTION }}
-
