@@ -462,8 +462,8 @@ function seoulUrl(service, start, end, tailSegments) {
 
 function fillTemplate(template, values) {
   return template
-    .replaceAll("{key}", encodeURIComponent(dataGoKrApiKey || seoulApiKey))
-    .replaceAll("{serviceKey}", encodeURIComponent(dataGoKrApiKey || seoulApiKey))
+    .replaceAll("{key}", dataGoKrApiKey || seoulApiKey)
+    .replaceAll("{serviceKey}", dataGoKrApiKey || seoulApiKey)
     .replaceAll("{start}", values.start)
     .replaceAll("{end}", values.end)
     .replaceAll("{lineNo}", encodeURIComponent(targetLineNo))

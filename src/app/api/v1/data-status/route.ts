@@ -5,7 +5,20 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    return Response.json(await getDataStatus());
+    const status = await getDataStatus();
+
+    return Response.json({
+      ready: status.ready,
+      status: status.status,
+      message: status.message,
+      last_ingestion: status.lastIngestion
+        ? {
+            source_name: status.lastIngestion.sourceName,
+            status: status.lastIngestion.status,
+            finished_at: status.lastIngestion.finishedAt
+          }
+        : null
+    });
   } catch (error) {
     return errorResponse(error);
   }

@@ -7,6 +7,7 @@ import {
   Database,
   MapPin,
   Search,
+  Settings,
   TrainFront
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -46,7 +47,19 @@ interface TrainLayoutResponse {
   confidence: number;
 }
 
+interface DataStatusResponse {
+  ready: boolean;
+  status: "READY" | "MISSING_DATABASE_URL" | "DATABASE_ERROR" | "SCHEMA_MISSING" | "DATA_MISSING";
+  message: string;
+  last_ingestion: {
+    source_name: string;
+    status: string;
+    finished_at: string | null;
+  } | null;
+}
+
 export function HomeClient() {
+  const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -61,8 +74,22 @@ export function HomeClient() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadStations() {
+    async function loadInitialData() {
       try {
+        const statusResponse = await fetch("/api/v1/data-status");
+        const statusPayload = (await statusResponse.json()) as DataStatusResponse;
+        if (!statusResponse.ok) {
+          throw new Error("서비스 데이터 상태를 확인하지 못했습니다.");
+        }
+        if (ignore) {
+          return;
+        }
+
+        setDataStatus(statusPayload);
+        if (!statusPayload.ready) {
+          return;
+        }
+
         const response = await fetch("/api/v1/stations?line_no=3");
         const payload = await response.json();
         if (!response.ok) {
@@ -87,14 +114,16 @@ export function HomeClient() {
       }
     }
 
-    loadStations();
+    loadInitialData();
 
     return () => {
       ignore = true;
     };
   }, []);
 
-  const canSubmit = Boolean(origin && destination && datetime && !loading && !stationLoading);
+  const canSubmit = Boolean(
+    dataStatus?.ready && origin && destination && datetime && !loading && !stationLoading
+  );
   const originOrder = useMemo(
     () => stations.find((station) => station.station_name === origin)?.sequence_no ?? 0,
     [origin, stations]
@@ -233,15 +262,36 @@ export function HomeClient() {
         </section>
       ) : null}
 
+      {dataStatus && !dataStatus.ready ? <SetupState dataStatus={dataStatus} /> : null}
+
       {recommendation && layout ? (
         <ResultView recommendation={recommendation} layout={layout} />
-      ) : (
+      ) : dataStatus?.ready ? (
         <section className="empty-state">
           <Database size={20} aria-hidden="true" />
           <p>공공데이터 수집 배치가 DB에 적재한 값을 기준으로 추천합니다.</p>
         </section>
-      )}
+      ) : null}
     </main>
+  );
+}
+
+function SetupState({ dataStatus }: { dataStatus: DataStatusResponse }) {
+  return (
+    <section className="setup-state" aria-label="서비스 데이터 준비 상태">
+      <div className="setup-icon">
+        <Settings size={22} aria-hidden="true" />
+      </div>
+      <div>
+        <h2>서비스 데이터 준비가 필요합니다</h2>
+        <p>{toSetupMessage(dataStatus)}</p>
+        {dataStatus.last_ingestion ? (
+          <p className="setup-meta">
+            최근 수집: {dataStatus.last_ingestion.source_name} · {dataStatus.last_ingestion.status}
+          </p>
+        ) : null}
+      </div>
+    </section>
   );
 }
 
@@ -367,3 +417,17 @@ function toApiDatetime(value: string) {
   return value.length === 16 ? `${value}:00+09:00` : `${value}+09:00`;
 }
 
+function toSetupMessage(dataStatus: DataStatusResponse) {
+  switch (dataStatus.status) {
+    case "MISSING_DATABASE_URL":
+      return "운영 DB 연결 정보가 아직 설정되지 않았습니다.";
+    case "SCHEMA_MISSING":
+      return "DB는 연결됐지만 스키마가 생성되지 않았습니다.";
+    case "DATA_MISSING":
+      return "DB는 연결됐지만 추천에 필요한 공공데이터 적재가 끝나지 않았습니다.";
+    case "DATABASE_ERROR":
+      return "DB 상태 확인 중 오류가 발생했습니다.";
+    default:
+      return dataStatus.message;
+  }
+}

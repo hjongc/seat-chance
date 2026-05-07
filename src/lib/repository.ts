@@ -301,7 +301,12 @@ export async function getDataStatus(): Promise<DataStatus> {
     return {
       ready: false,
       status: "DATABASE_ERROR",
-      message: error instanceof Error ? error.message : "DB 상태를 확인하지 못했습니다.",
+      message:
+        process.env.NODE_ENV === "production"
+          ? "DB 상태를 확인하는 중 오류가 발생했습니다."
+          : error instanceof Error
+            ? error.message
+            : "DB 상태를 확인하지 못했습니다.",
       counts: {},
       lastIngestion: null
     };
