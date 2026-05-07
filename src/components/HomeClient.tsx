@@ -58,8 +58,11 @@ interface DataStatusResponse {
   } | null;
 }
 
+const supportedLines = [{ lineNo: "3", label: "3호선" }];
+
 export function HomeClient() {
   const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
+  const [lineNo, setLineNo] = useState("3");
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -74,7 +77,7 @@ export function HomeClient() {
   useEffect(() => {
     let ignore = false;
 
-    async function loadInitialData() {
+    async function loadDataStatus() {
       try {
         const statusResponse = await fetch("/api/v1/data-status");
         const statusPayload = (await statusResponse.json()) as DataStatusResponse;
@@ -86,11 +89,36 @@ export function HomeClient() {
         }
 
         setDataStatus(statusPayload);
-        if (!statusPayload.ready) {
-          return;
+      } catch (nextError) {
+        if (!ignore) {
+          setError(nextError instanceof Error ? nextError.message : "서비스 데이터 상태를 확인하지 못했습니다.");
         }
+      }
+    }
 
-        const response = await fetch("/api/v1/stations?line_no=3");
+    loadDataStatus();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadStations() {
+      if (!dataStatus?.ready) {
+        setStationLoading(false);
+        return;
+      }
+
+      setStationLoading(true);
+      setError("");
+      setRecommendation(null);
+      setLayout(null);
+
+      try {
+        const response = await fetch(`/api/v1/stations?line_no=${encodeURIComponent(lineNo)}`);
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.error?.message ?? "역 목록을 불러오지 못했습니다.");
@@ -114,12 +142,12 @@ export function HomeClient() {
       }
     }
 
-    loadInitialData();
+    loadStations();
 
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [dataStatus?.ready, lineNo]);
 
   const canSubmit = Boolean(
     dataStatus?.ready && origin && destination && datetime && !loading && !stationLoading
@@ -151,14 +179,18 @@ export function HomeClient() {
       const query = new URLSearchParams({
         origin,
         destination,
-        line_no: "3",
+        line_no: lineNo,
         direction,
         datetime: toApiDatetime(datetime),
         mode: "seat"
       });
       const [recommendationResponse, layoutResponse] = await Promise.all([
         fetch(`/api/v1/recommendations?${query.toString()}`),
-        fetch(`/api/v1/train-layout?line_no=3&direction=${encodeURIComponent(direction)}`)
+        fetch(
+          `/api/v1/train-layout?line_no=${encodeURIComponent(lineNo)}&direction=${encodeURIComponent(
+            direction
+          )}`
+        )
       ]);
       const recommendationPayload = await recommendationResponse.json();
       const layoutPayload = await layoutResponse.json();
@@ -187,17 +219,40 @@ export function HomeClient() {
         </div>
         <div>
           <h1>앉을각</h1>
-          <p>3호선 좌석 회전 위치 추천</p>
+          <p>호선별 좌석 회전 위치 추천</p>
         </div>
       </section>
 
       <form className="search-panel" onSubmit={handleSubmit}>
         <label className="field">
           <span>
-            <MapPin size={16} aria-hidden="true" />
-            출발역
+            <TrainFront size={16} aria-hidden="true" />
+            호선
           </span>
-          <select value={origin} onChange={(event) => setOrigin(event.target.value)} disabled={stationLoading}>
+          <select
+            value={lineNo}
+            onChange={(event) => setLineNo(event.target.value)}
+            disabled={!dataStatus?.ready}
+          >
+            {supportedLines.map((line) => (
+              <option key={line.lineNo} value={line.lineNo}>
+                {line.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span>
+            <MapPin size={16} aria-hidden="true" />
+            탑승역
+          </span>
+          <select
+            value={origin}
+            onChange={(event) => setOrigin(event.target.value)}
+            disabled={stationLoading || stations.length === 0}
+          >
+            <option value="">탑승역 선택</option>
             {stations.map((station) => (
               <option key={station.station_code} value={station.station_name}>
                 {station.station_name}
@@ -209,13 +264,14 @@ export function HomeClient() {
         <label className="field">
           <span>
             <MapPin size={16} aria-hidden="true" />
-            도착역
+            내릴역
           </span>
           <select
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            disabled={stationLoading}
+            disabled={stationLoading || stations.length === 0}
           >
+            <option value="">내릴역 선택</option>
             {stations.map((station) => (
               <option key={station.station_code} value={station.station_name}>
                 {station.station_name}
@@ -311,7 +367,9 @@ function ResultView({
           </p>
           <h2>앉을 가능성이 높은 위치</h2>
         </div>
-        <span className="line-chip">3호선 {recommendation.direction} 방면</span>
+        <span className="line-chip">
+          {recommendation.line_no}호선 {recommendation.direction} 방면
+        </span>
       </div>
 
       <div className="recommendation-list">
