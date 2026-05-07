@@ -376,7 +376,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
   padding: 8px;
   scroll-snap-align: start;
 }
@@ -386,6 +386,11 @@ select {
   font-size: 12px;
   font-weight: 800;
   text-align: center;
+}
+
+.door-row {
+  display: grid;
+  gap: 6px;
 }
 
 .door-cell {

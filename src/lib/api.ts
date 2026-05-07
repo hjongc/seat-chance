@@ -7,6 +7,13 @@ export function parseDirection(value: string | null): DirectionCode {
   throw new ApiInputError("direction은 오금 또는 대화만 지원합니다.");
 }
 
+export function parseOptionalDirection(value: string | null): DirectionCode | undefined {
+  if (!value || value.trim() === "") {
+    return undefined;
+  }
+  return parseDirection(value);
+}
+
 export function parseMode(value: string | null): RecommendationMode {
   if (!value || value === "seat") {
     return "seat";
@@ -43,4 +50,3 @@ export function errorResponse(error: unknown) {
     { status }
   );
 }
-

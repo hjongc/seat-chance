@@ -189,22 +189,27 @@ function scoreCandidate({
     }
 
     const progress = (index + 1) / totalStops;
-    const arrivalPenalty = progress > 0.72 ? (progress - 0.72) * 1.8 : 0;
-    const distanceWeight = clamp(1 - arrivalPenalty, 0.28, 1);
+    const stationsAfter = totalStops - index - 1;
+    const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
+    const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
+    const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
     const alightingScore = profile.alightings / maxAlightings;
-    const boardingPenalty = (profile.boardings / maxBoardings) * 0.36;
-    const stationDemand = clamp(alightingScore - boardingPenalty, 0, 1);
+    const boardingScore = profile.boardings / maxBoardings;
+    const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
     const matchingHint = doorHints.find(
       (hint) =>
         hint.stationName === station.stationName &&
         hint.carNo === candidate.carNo &&
         hint.doorNo === candidate.doorNo
     );
-    const baseline = stationDemand * 8 * distanceWeight;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight;
     const hintBonus = matchingHint
       ? stationDemand * matchingHint.weight * (matchingHint.kind === "transfer" ? 34 : 22) * distanceWeight
       : 0;
-    const contributionScore = baseline + hintBonus;
+    const hintBoost = matchingHint
+      ? (matchingHint.kind === "transfer" ? 1.25 : 0.75)
+      : 0;
+    const contributionScore = baseline + hintBonus * hintBoost;
 
     scored.rawScore += contributionScore;
     if (contributionScore > 0) {
@@ -262,10 +267,12 @@ function toGrade(score: number) {
 }
 
 function toExpectedSeatWindow(contributions: Contribution[]): string {
-  const keyStations = contributions
-    .filter((contribution) => contribution.hint)
-    .slice(0, 2)
-    .sort((left, right) => left.sequenceNo - right.sequenceNo);
+  const hintedContributions = contributions.filter((contribution) => contribution.hint);
+  const keyStations =
+    hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2).length >= 2
+      ? hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2)
+      : hintedContributions.slice(0, 2);
+  keyStations.sort((left, right) => left.sequenceNo - right.sequenceNo);
 
   if (keyStations.length >= 2) {
     return `${keyStations[0].stationName}~${keyStations[1].stationName}`;
@@ -293,6 +300,10 @@ function toReasons(contributions: Contribution[]): string[] {
     reasons.push(`${primary.stationName} 하차 수요가 높은 구간입니다.`);
   }
 
+  if (primary && primary.stationDemand > 0.2) {
+    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석 회전에 유리합니다.`);
+  }
+
   if (secondary?.hint?.kind === "transfer") {
     reasons.push(`${secondary.stationName} 환승 동선과도 가까운 위치입니다.`);
   } else if (secondary?.hint?.kind === "facility") {
@@ -315,4 +326,3 @@ function roundToTenth(value: number): number {
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
-

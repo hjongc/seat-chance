@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  ArrowRightLeft,
   Clock3,
   Database,
   MapPin,
@@ -66,7 +65,6 @@ export function HomeClient() {
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [direction, setDirection] = useState("오금");
   const [datetime, setDatetime] = useState(defaultDatetime());
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [layout, setLayout] = useState<TrainLayoutResponse | null>(null);
@@ -150,7 +148,7 @@ export function HomeClient() {
   }, [dataStatus?.ready, lineNo]);
 
   const canSubmit = Boolean(
-    dataStatus?.ready && origin && destination && datetime && !loading && !stationLoading
+    dataStatus?.ready && origin && destination && datetime && direction && !loading && !stationLoading
   );
   const originOrder = useMemo(
     () => stations.find((station) => station.station_name === origin)?.sequence_no ?? 0,
@@ -161,15 +159,22 @@ export function HomeClient() {
     [destination, stations]
   );
 
-  useEffect(() => {
-    if (!originOrder || !destinationOrder) {
-      return;
-    }
-    setDirection(originOrder < destinationOrder ? "오금" : "대화");
-  }, [originOrder, destinationOrder]);
+  const direction = useMemo(
+    () =>
+      originOrder > 0 && destinationOrder > 0 && origin !== destination
+        ? originOrder < destinationOrder
+          ? "오금"
+          : "대화"
+        : "",
+    [destinationOrder, origin, originOrder]
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!direction) {
+      setError("탑승역과 내릴역을 같은 노선 내에서 순서가 다른 방향으로 선택해주세요.");
+      return;
+    }
     setLoading(true);
     setError("");
     setRecommendation(null);
@@ -293,16 +298,6 @@ export function HomeClient() {
             />
           </label>
 
-          <label className="field">
-            <span>
-              <ArrowRightLeft size={16} aria-hidden="true" />
-              방향
-            </span>
-            <select value={direction} onChange={(event) => setDirection(event.target.value)}>
-              <option value="오금">오금</option>
-              <option value="대화">대화</option>
-            </select>
-          </label>
         </div>
 
         <button className="primary-action" type="submit" disabled={!canSubmit}>
@@ -434,18 +429,23 @@ function TrainLayout({
           return (
             <div className="car-column" key={carNo}>
               <div className="car-label">{carNo}호차</div>
-              {Array.from({ length: layout.doors_per_car }, (_, doorIndex) => {
-                const doorNo = doorIndex + 1;
-                const rank = rankedDoors.get(`${carNo}-${doorNo}`);
-                return (
-                  <div className={rank ? "door-cell door-highlight" : "door-cell"} key={doorNo}>
-                    <span>
-                      {carNo}-{doorNo}
-                    </span>
-                    {rank ? <strong>{rank}위</strong> : null}
-                  </div>
-                );
-              })}
+              <div
+                className="door-row"
+                style={{ gridTemplateColumns: `repeat(${layout.doors_per_car}, minmax(0, 1fr))` }}
+              >
+                {Array.from({ length: layout.doors_per_car }, (_, doorIndex) => {
+                  const doorNo = doorIndex + 1;
+                  const rank = rankedDoors.get(`${carNo}-${doorNo}`);
+                  return (
+                    <div className={rank ? "door-cell door-highlight" : "door-cell"} key={doorNo}>
+                      <span>
+                        {carNo}-{doorNo}
+                      </span>
+                      {rank ? <strong>{rank}위</strong> : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
