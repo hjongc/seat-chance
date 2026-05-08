@@ -43,7 +43,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run db:ingest
+      - run: timeout 8m npm run db:ingest
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
