@@ -31,6 +31,7 @@ export interface DataStatus {
 export interface SeatChanceRepository {
   getTrainLayout(lineNo: string, direction: DirectionCode): Promise<TrainLayout | null>;
   getStations(lineNo: string): Promise<SeatChanceDataset["stations"]>;
+  getLines(): Promise<Array<{ lineNo: string; stationCount: number }>>;
   getDataset(input: {
     lineNo: string;
     direction: DirectionCode;
@@ -68,6 +69,24 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
     );
 
     return result.rows;
+  }
+
+  async getLines() {
+    const result = await this.pool.query<{ lineNo: string; stationCount: string }>(`
+      select
+        line_no as "lineNo",
+        count(*)::text as "stationCount"
+      from station_line_order
+      group by line_no
+      order by
+        case when line_no ~ '^[0-9]+$' then line_no::int else 999999 end,
+        line_no
+    `);
+
+    return result.rows.map((row) => ({
+      lineNo: row.lineNo,
+      stationCount: Number(row.stationCount)
+    }));
   }
 
   async getTrainLayout(lineNo: string, direction: DirectionCode) {
@@ -276,7 +295,7 @@ export async function getDataStatus(): Promise<DataStatus> {
       };
     }
 
-    const counts = await readTableCounts(statusPool);
+    const counts = await readTablePresence(statusPool);
     const lastIngestion = await readLastIngestion(statusPool);
     const emptyTables = requiredTables.filter((tableName) => counts[tableName] === 0);
 
@@ -313,15 +332,17 @@ export async function getDataStatus(): Promise<DataStatus> {
   }
 }
 
-async function readTableCounts(pool: Pool): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
+async function readTablePresence(pool: Pool): Promise<Record<string, number>> {
+  const entries = await Promise.all(
+    requiredTables.map(async (tableName) => {
+      const result = await pool.query<{ hasRows: boolean }>(
+        `select exists(select 1 from ${tableName} limit 1) as "hasRows"`
+      );
+      return [tableName, result.rows[0]?.hasRows ? 1 : 0] as const;
+    })
+  );
 
-  for (const tableName of requiredTables) {
-    const result = await pool.query<{ count: string }>(`select count(*) from ${tableName}`);
-    counts[tableName] = Number(result.rows[0]?.count ?? 0);
-  }
-
-  return counts;
+  return Object.fromEntries(entries);
 }
 
 async function readLastIngestion(pool: Pool): Promise<DataStatus["lastIngestion"]> {

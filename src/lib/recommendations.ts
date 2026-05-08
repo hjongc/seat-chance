@@ -67,17 +67,21 @@ export function recommendSeatPositions(
       profile.timeSlot === timeSlot
   );
   const congestionPenalty = getCongestionPenalty(congestion);
+  const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
+  const doorHintsByStationAndCar = indexDoorHints(
+    dataset.doorHints.filter(
+      (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
+    )
+  );
   const candidates = buildDoorCandidates(layout).map((candidate) =>
     scoreCandidate({
       candidate,
       intermediateStations,
       totalStops: routeStations.length - 1,
-      profiles,
+      profileByStation,
       maxAlightings,
       maxBoardings,
-      doorHints: dataset.doorHints.filter(
-        (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
-      )
+      doorHintsByStationAndCar
     })
   );
 
@@ -131,7 +135,7 @@ function findRouteStations(
   const destinationStation = lineStations.find((station) => station.stationName === destination);
 
   if (!originStation || !destinationStation) {
-    throw new RecommendationInputError("출발역 또는 도착역이 3호선 MVP 범위에 없습니다.");
+    throw new RecommendationInputError("선택한 노선의 역 목록 내에 탑승역/내릴역이 없습니다.");
   }
 
   const isOgeumBound = direction === "오금";
@@ -167,23 +171,23 @@ function scoreCandidate({
   candidate,
   intermediateStations,
   totalStops,
-  profiles,
+  profileByStation,
   maxAlightings,
   maxBoardings,
-  doorHints
+  doorHintsByStationAndCar
 }: {
   candidate: Candidate;
   intermediateStations: Station[];
   totalStops: number;
-  profiles: SeatChanceDataset["ridershipProfiles"];
+  profileByStation: Map<string, SeatChanceDataset["ridershipProfiles"][number]>;
   maxAlightings: number;
   maxBoardings: number;
-  doorHints: DoorHint[];
+  doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
 
   for (const [index, station] of intermediateStations.entries()) {
-    const profile = profiles.find((candidateProfile) => candidateProfile.stationName === station.stationName);
+    const profile = profileByStation.get(station.stationName);
     if (!profile) {
       continue;
     }
@@ -196,18 +200,33 @@ function scoreCandidate({
     const alightingScore = profile.alightings / maxAlightings;
     const boardingScore = profile.boardings / maxBoardings;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
-    const matchingHint = doorHints.find(
-      (hint) =>
-        hint.stationName === station.stationName &&
-        hint.carNo === candidate.carNo &&
-        hint.doorNo === candidate.doorNo
+    const matchingHint = (doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? []).reduce<{
+      hint: DoorHint;
+      distance: number;
+    } | null>(
+      (best, hint) => {
+        const distance = Math.abs(hint.doorNo - candidate.doorNo);
+        if (distance > 1) {
+          return best;
+        }
+        if (!best || distance < best.distance || (distance === best.distance && hint.weight > best.hint.weight)) {
+          return { hint, distance };
+        }
+        return best;
+      },
+      null
     );
+    const hintDistanceFactor = matchingHint
+      ? matchingHint.distance === 0
+        ? 1
+        : 0.9
+      : 0;
     const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight;
     const hintBonus = matchingHint
-      ? stationDemand * matchingHint.weight * (matchingHint.kind === "transfer" ? 34 : 22) * distanceWeight
+      ? stationDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor
       : 0;
     const hintBoost = matchingHint
-      ? (matchingHint.kind === "transfer" ? 1.25 : 0.75)
+      ? (matchingHint.hint.kind === "transfer" ? 1.25 : 0.75)
       : 0;
     const contributionScore = baseline + hintBonus * hintBoost;
 
@@ -218,13 +237,33 @@ function scoreCandidate({
         sequenceNo: station.sequenceNo,
         remainingStops: intermediateStations.length - index,
         score: contributionScore,
-        hint: matchingHint ?? null,
+        hint: matchingHint ? matchingHint.hint : null,
         stationDemand
       });
     }
   }
 
   return scored;
+}
+
+function indexDoorHints(doorHints: DoorHint[]) {
+  const index = new Map<string, DoorHint[]>();
+
+  for (const hint of doorHints) {
+    const key = hintIndexKey(hint.stationName, hint.carNo);
+    const hints = index.get(key);
+    if (hints) {
+      hints.push(hint);
+    } else {
+      index.set(key, [hint]);
+    }
+  }
+
+  return index;
+}
+
+function hintIndexKey(stationName: string, carNo: number) {
+  return `${stationName}\u0000${carNo}`;
 }
 
 function toRecommendation(

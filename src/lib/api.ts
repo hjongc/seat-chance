@@ -50,3 +50,13 @@ export function errorResponse(error: unknown) {
     { status }
   );
 }
+
+export function cachedJsonResponse(body: unknown, cacheControl: string, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", cacheControl);
+
+  return Response.json(body, {
+    ...init,
+    headers
+  });
+}

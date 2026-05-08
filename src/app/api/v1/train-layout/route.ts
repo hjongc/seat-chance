@@ -1,4 +1,4 @@
-import { errorResponse, parseDirection, requiredParam } from "@/lib/api";
+import { cachedJsonResponse, errorResponse, parseDirection, requiredParam } from "@/lib/api";
 import { getSeatChanceRepository } from "@/lib/repository";
 
 export const runtime = "nodejs";
@@ -21,16 +21,18 @@ export async function GET(request: Request) {
       );
     }
 
-    return Response.json({
-      line_no: layout.lineNo,
-      direction: layout.direction,
-      car_count: layout.carCount,
-      doors_per_car: layout.doorsPerCar,
-      source: layout.source,
-      confidence: layout.confidence
-    });
+    return cachedJsonResponse(
+      {
+        line_no: layout.lineNo,
+        direction: layout.direction,
+        car_count: layout.carCount,
+        doors_per_car: layout.doorsPerCar,
+        source: layout.source,
+        confidence: layout.confidence
+      },
+      "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400"
+    );
   } catch (error) {
     return errorResponse(error);
   }
 }
-

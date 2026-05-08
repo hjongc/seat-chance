@@ -1,4 +1,4 @@
-import { errorResponse, parseMode, parseOptionalDirection, requiredParam } from "@/lib/api";
+import { cachedJsonResponse, errorResponse, parseMode, parseOptionalDirection, requiredParam } from "@/lib/api";
 import { recommendSeatPositions } from "@/lib/recommendations";
 import { getSeatChanceRepository } from "@/lib/repository";
 import { RecommendationInputError, toDayType, toTimeSlot } from "@/lib/time";
@@ -18,19 +18,13 @@ export async function GET(request: Request) {
       datetime,
       mode: parseMode(params.get("mode"))
     };
-    const repository = getSeatChanceRepository();
-    const stations = await repository.getStations(lineNo);
-    const inferredDirection = inferDirection(stations, input.origin, input.destination);
     const parsedDirection = parseOptionalDirection(params.get("direction"));
-    const direction: DirectionCode =
-      parsedDirection ??
-      inferredDirection ??
-      (() => {
-        throw new RecommendationInputError("direction 또는 탑승역/내릴역으로 방향을 확인할 수 없습니다.");
-      })();
+    const repository = getSeatChanceRepository();
+    let direction: DirectionCode | undefined = parsedDirection;
 
-    if (parsedDirection && parsedDirection !== inferredDirection) {
-      throw new RecommendationInputError("direction이 탑승역/내릴역 순서와 일치하지 않습니다.");
+    if (!direction) {
+      const stations = await repository.getStations(lineNo);
+      direction = inferDirection(stations, input.origin, input.destination);
     }
 
     const dataset = await repository.getDataset({
@@ -39,14 +33,32 @@ export async function GET(request: Request) {
       dayType: toDayType(datetime),
       timeSlot: toTimeSlot(datetime)
     });
-    return Response.json(
-      recommendSeatPositions(
-        {
-          ...input,
-          direction
-        },
-        dataset
-      )
+    const recommendation = recommendSeatPositions(
+      {
+        ...input,
+        direction
+      },
+      dataset
+    );
+    const layout = dataset.trainLayouts.find(
+      (candidate) => candidate.lineNo === lineNo && candidate.direction === direction
+    );
+
+    return cachedJsonResponse(
+      {
+        ...recommendation,
+        train_layout: layout
+          ? {
+              line_no: layout.lineNo,
+              direction: layout.direction,
+              car_count: layout.carCount,
+              doors_per_car: layout.doorsPerCar,
+              source: layout.source,
+              confidence: layout.confidence
+            }
+          : null
+      },
+      "public, max-age=60, s-maxage=600, stale-while-revalidate=3600"
     );
   } catch (error) {
     return errorResponse(error);
