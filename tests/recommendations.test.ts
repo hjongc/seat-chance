@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recommendSeatPositions } from "../src/lib/recommendations";
-import { toTimeSlot } from "../src/lib/time";
+import { toDayType, toTimeSlot } from "../src/lib/time";
 import type { SeatChanceDataset } from "../src/lib/types";
 
 const dataset: SeatChanceDataset = {
   stations: [
+    "대화",
     "경복궁",
     "안국",
     "종로3가",
@@ -16,7 +17,8 @@ const dataset: SeatChanceDataset = {
     "금호",
     "옥수",
     "압구정",
-    "신사"
+    "신사",
+    "오금"
   ].map((stationName, index) => ({
     operator: "서울교통공사",
     lineNo: "3",
@@ -125,6 +127,58 @@ test("rounds departure time up to the next half-hour slot", () => {
   assert.equal(toTimeSlot("2026-05-07T10:10:00+09:00"), "10:30");
   assert.equal(toTimeSlot("2026-05-07T10:30:00+09:00"), "10:30");
   assert.equal(toTimeSlot("2026-05-07T23:50:00+09:00"), "23:30");
+});
+
+test("uses Korea time for offset datetimes", () => {
+  assert.equal(toTimeSlot("2026-05-08T01:10:00Z"), "10:30");
+  assert.equal(toDayType("2026-05-08T01:10:00Z"), "WEEKDAY");
+});
+
+test("supports non-line-3 terminal directions with fallback layout", () => {
+  const lineOneDataset: SeatChanceDataset = {
+    ...dataset,
+    stations: ["연천", "의정부", "서울역", "신창"].map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "1",
+      stationCode: `L1-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [],
+    congestionProfiles: [],
+    doorHints: [],
+    ridershipProfiles: [
+      ["의정부", 500, 1300],
+      ["서울역", 800, 2100]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "1",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    }))
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "연천",
+      destination: "신창",
+      lineNo: "1",
+      direction: "신창",
+      datetime: "2026-05-07T08:00:00+09:00",
+      mode: "seat"
+    },
+    lineOneDataset
+  );
+
+  assert.equal(result.line_no, "1");
+  assert.equal(result.direction, "신창");
+  assert.equal(result.recommendations.length, 3);
+  assert.equal(result.recommendations[0].score, 0);
+  assert.equal(result.recommendations[0].expected_seat_window, "데이터 부족");
 });
 
 test("rejects reverse route when direction does not match station order", () => {

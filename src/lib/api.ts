@@ -1,10 +1,11 @@
 import type { DirectionCode, RecommendationMode } from "./types";
 
 export function parseDirection(value: string | null): DirectionCode {
-  if (value === "오금" || value === "대화") {
-    return value;
+  const direction = value?.trim() ?? "";
+  if (direction && direction.length <= 40 && !/[\u0000-\u001f\u007f]/.test(direction)) {
+    return direction;
   }
-  throw new ApiInputError("direction은 오금 또는 대화만 지원합니다.");
+  throw new ApiInputError("direction 값이 올바르지 않습니다.");
 }
 
 export function parseOptionalDirection(value: string | null): DirectionCode | undefined {
@@ -40,11 +41,14 @@ export function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "Unexpected error";
   const errorName = error instanceof Error ? error.name : "";
   const status = error instanceof ApiInputError || errorName === "RecommendationInputError" ? 400 : 500;
+  if (status >= 500) {
+    console.error(error);
+  }
 
   return Response.json(
     {
       error: {
-        message
+        message: status >= 500 ? "서버에서 요청을 처리하지 못했습니다." : message
       }
     },
     { status }

@@ -13,6 +13,29 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        target_line_no:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+          - "7"
+          - "8"
+          - "9"
+          - "공항철도"
+          - "경의중앙"
+          - "경춘"
+          - "수인분당"
+          - "신분당"
+          - "우이신설"
+          - "서해"
+          - "김포골드"
+          - "신림"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -27,7 +50,7 @@ jobs:
           SEOUL_REALTIME_SUBWAY_API_KEY: ${{ secrets.SEOUL_REALTIME_SUBWAY_API_KEY }}
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
-          TARGET_LINE_NO: "3"
+          TARGET_LINE_NO: ${{ matrix.target_line_no }}
           TARGET_MONTH: ${{ inputs.target_month }}
           TRANSFER_CSV_URL: ${{ secrets.TRANSFER_CSV_URL }}
           TRANSFER_API_URL_TEMPLATE: ${{ secrets.TRANSFER_API_URL_TEMPLATE }}
@@ -36,5 +59,3 @@ jobs:
           TRAIN_OPERATION_API_URL_TEMPLATE: ${{ secrets.TRAIN_OPERATION_API_URL_TEMPLATE }}
           CONGESTION_CSV_URL: ${{ secrets.CONGESTION_CSV_URL }}
           CONGESTION_API_URL_TEMPLATE: ${{ secrets.CONGESTION_API_URL_TEMPLATE }}
-          LINE3_UP_DIRECTION: ${{ secrets.LINE3_UP_DIRECTION }}
-          LINE3_DOWN_DIRECTION: ${{ secrets.LINE3_DOWN_DIRECTION }}

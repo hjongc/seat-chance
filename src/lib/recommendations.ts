@@ -1,4 +1,6 @@
+import { forwardDirectionName, reverseDirectionName } from "./directions";
 import { RecommendationInputError, toDayType, toTimeSlot } from "./time";
+import { fallbackTrainLayout } from "./train-layout";
 import type {
   CongestionProfile,
   DoorHint,
@@ -149,10 +151,7 @@ function findTrainLayout(
   const layout = layouts.find(
     (candidate) => candidate.lineNo === lineNo && candidate.direction === direction
   );
-  if (!layout) {
-    throw new RecommendationInputError("해당 노선/방향의 열차 레이아웃을 찾을 수 없습니다.");
-  }
-  return layout;
+  return layout ?? fallbackTrainLayout(lineNo, direction);
 }
 
 function findRouteStations(
@@ -172,10 +171,13 @@ function findRouteStations(
     throw new RecommendationInputError("선택한 노선의 역 목록 내에 승차역/하차역이 없습니다.");
   }
 
-  const isOgeumBound = direction === "오금";
-  const isValidDirection = isOgeumBound
+  const forwardDirection = forwardDirectionName(lineNo, lineStations.at(-1)?.stationName ?? "");
+  const reverseDirection = reverseDirectionName(lineNo, lineStations[0]?.stationName ?? "");
+  const isForwardBound = direction === forwardDirection;
+  const isReverseBound = direction === reverseDirection;
+  const isValidDirection = isForwardBound
     ? originStation.sequenceNo < destinationStation.sequenceNo
-    : originStation.sequenceNo > destinationStation.sequenceNo;
+    : isReverseBound && originStation.sequenceNo > destinationStation.sequenceNo;
 
   if (!isValidDirection) {
     throw new RecommendationInputError("선택한 방향과 승차역/하차역 순서가 맞지 않습니다.");
@@ -188,7 +190,7 @@ function findRouteStations(
     (station) => station.sequenceNo >= start && station.sequenceNo <= end
   );
 
-  return isOgeumBound ? route : route.reverse();
+  return isForwardBound ? route : route.reverse();
 }
 
 function buildDoorCandidates(layout: TrainLayout): Candidate[] {
@@ -306,7 +308,7 @@ function toRecommendation(
   maxRaw: number,
   congestionPenalty: number
 ): Recommendation {
-  if (maxRaw <= 0) {
+  if (maxRaw <= 0 || maxRaw === minRaw) {
     return {
       rank: 0,
       car_no: candidate.carNo,
@@ -314,7 +316,7 @@ function toRecommendation(
       score: 0,
       grade: "LOW",
       expected_seat_window: "데이터 부족",
-      reasons: ["선택한 시간대 주변 데이터가 부족해 좌석각을 계산하지 못했습니다."]
+      reasons: ["호차별 위치를 구분할 출입문 데이터가 부족해 좌석각을 계산하지 못했습니다."]
     };
   }
 

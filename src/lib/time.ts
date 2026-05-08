@@ -1,17 +1,8 @@
 import type { DayType } from "./types";
 
 export function toTimeSlot(datetime: string): string {
-  const timeMatch = datetime.match(/T(?<hour>\d{2}):(?<minute>\d{2})/);
-  if (timeMatch?.groups) {
-    return toHalfHourSlot(Number(timeMatch.groups.hour), Number(timeMatch.groups.minute));
-  }
-
-  const date = new Date(datetime);
-  if (Number.isNaN(date.getTime())) {
-    throw new RecommendationInputError("datetime 값이 올바른 ISO 날짜가 아닙니다.");
-  }
-
-  return toHalfHourSlot(date.getHours(), date.getMinutes());
+  const { hour, minute } = toKstDateTimeParts(datetime);
+  return toHalfHourSlot(hour, minute);
 }
 
 function toHalfHourSlot(hour: number, minute: number) {
@@ -23,17 +14,53 @@ function toHalfHourSlot(hour: number, minute: number) {
 }
 
 export function toDayType(datetime: string): DayType {
+  const { weekday } = toKstDateTimeParts(datetime);
+  return weekday === "Sat" || weekday === "Sun" ? "WEEKEND" : "WEEKDAY";
+}
+
+function toKstDateTimeParts(datetime: string) {
+  const localMatch = datetime.match(
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2})(?::\d{2})?$/
+  );
+  if (localMatch?.groups) {
+    const hour = Number(localMatch.groups.hour);
+    const minute = Number(localMatch.groups.minute);
+    assertValidTime(hour, minute);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      weekday: "short"
+    }).format(
+      new Date(
+        Date.UTC(Number(localMatch.groups.year), Number(localMatch.groups.month) - 1, Number(localMatch.groups.day))
+      )
+    );
+    return { hour, minute, weekday };
+  }
+
   const date = new Date(datetime);
   if (Number.isNaN(date.getTime())) {
     throw new RecommendationInputError("datetime 값이 올바른 ISO 날짜가 아닙니다.");
   }
 
-  const weekday = new Intl.DateTimeFormat("en-US", {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
+    hourCycle: "h23",
+    hour: "2-digit",
+    minute: "2-digit",
     weekday: "short"
-  }).format(date);
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
 
-  return weekday === "Sat" || weekday === "Sun" ? "WEEKEND" : "WEEKDAY";
+  assertValidTime(hour, minute);
+  return { hour, minute, weekday };
+}
+
+function assertValidTime(hour: number, minute: number) {
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    throw new RecommendationInputError("datetime 값이 올바른 ISO 날짜가 아닙니다.");
+  }
 }
 
 export class RecommendationInputError extends Error {

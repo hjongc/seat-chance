@@ -1,5 +1,6 @@
 import { cachedJsonResponse, errorResponse, parseDirection, requiredParam } from "@/lib/api";
 import { getSeatChanceRepository } from "@/lib/repository";
+import { fallbackTrainLayout } from "@/lib/train-layout";
 
 export const runtime = "nodejs";
 
@@ -8,18 +9,7 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const lineNo = requiredParam(params, "line_no");
     const direction = parseDirection(requiredParam(params, "direction"));
-    const layout = await getSeatChanceRepository().getTrainLayout(lineNo, direction);
-
-    if (!layout) {
-      return Response.json(
-        {
-          error: {
-            message: "해당 노선/방향의 열차 레이아웃 데이터가 없습니다."
-          }
-        },
-        { status: 404 }
-      );
-    }
+    const layout = (await getSeatChanceRepository().getTrainLayout(lineNo, direction)) ?? fallbackTrainLayout(lineNo, direction);
 
     return cachedJsonResponse(
       {

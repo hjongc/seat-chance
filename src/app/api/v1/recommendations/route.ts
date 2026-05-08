@@ -1,7 +1,9 @@
 import { cachedJsonResponse, errorResponse, parseMode, parseOptionalDirection, requiredParam } from "@/lib/api";
+import { forwardDirectionName, reverseDirectionName } from "@/lib/directions";
 import { recommendSeatPositions } from "@/lib/recommendations";
 import { getSeatChanceRepository } from "@/lib/repository";
 import { RecommendationInputError, toDayType, toTimeSlot } from "@/lib/time";
+import { fallbackTrainLayout } from "@/lib/train-layout";
 import type { DirectionCode } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -24,7 +26,7 @@ export async function GET(request: Request) {
 
     if (!direction) {
       const stations = await repository.getStations(lineNo);
-      direction = inferDirection(stations, input.origin, input.destination);
+      direction = inferDirection(stations, lineNo, input.origin, input.destination);
     }
 
     const dayType = toDayType(datetime);
@@ -55,22 +57,20 @@ export async function GET(request: Request) {
       },
       dataset
     );
-    const layout = dataset.trainLayouts.find(
-      (candidate) => candidate.lineNo === lineNo && candidate.direction === direction
-    );
+    const layout =
+      dataset.trainLayouts.find((candidate) => candidate.lineNo === lineNo && candidate.direction === direction) ??
+      fallbackTrainLayout(lineNo, direction);
 
     const payload = {
       ...recommendation,
-      train_layout: layout
-        ? {
-            line_no: layout.lineNo,
-            direction: layout.direction,
-            car_count: layout.carCount,
-            doors_per_car: layout.doorsPerCar,
-            source: layout.source,
-            confidence: layout.confidence
-          }
-        : null
+      train_layout: {
+        line_no: layout.lineNo,
+        direction: layout.direction,
+        car_count: layout.carCount,
+        doors_per_car: layout.doorsPerCar,
+        source: layout.source,
+        confidence: layout.confidence
+      }
     };
 
     await repository.setCachedRecommendation({
@@ -110,11 +110,12 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v5", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
+  return ["seat-v7", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }
 
 function inferDirection(
   stations: Array<{ stationName: string; sequenceNo: number }>,
+  lineNo: string,
   origin: string,
   destination: string
 ) {
@@ -128,5 +129,8 @@ function inferDirection(
     throw new RecommendationInputError("승차역과 하차역은 서로 달라야 합니다.");
   }
 
-  return originStation.sequenceNo < destinationStation.sequenceNo ? "오금" : "대화";
+  const sortedStations = [...stations].sort((left, right) => left.sequenceNo - right.sequenceNo);
+  return originStation.sequenceNo < destinationStation.sequenceNo
+    ? forwardDirectionName(lineNo, sortedStations.at(-1)?.stationName ?? "")
+    : reverseDirectionName(lineNo, sortedStations[0]?.stationName ?? "");
 }

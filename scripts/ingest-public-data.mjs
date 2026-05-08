@@ -1,5 +1,4 @@
 import { mkdir, rename, readFile, writeFile } from "node:fs/promises";
-import { request as httpsRequest } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -9,7 +8,7 @@ const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 await loadLocalEnv();
 
 const operator = "서울교통공사";
-const targetLineNo = process.env.TARGET_LINE_NO ?? "3";
+const targetLineNo = normalizeLineNo(process.env.TARGET_LINE_NO ?? "3");
 const targetMonth = process.env.TARGET_MONTH || previousKstMonth();
 const seoulApiKey = requiredEnv("SEOUL_OPEN_API_KEY");
 const dataGoKrApiKey = process.env.DATA_GO_KR_API_KEY ?? "";
@@ -38,11 +37,12 @@ const pool = new Pool({
   max: 1,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 10000,
-  ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
+  ssl: databaseUrl.includes("sslmode=") ? true : undefined
 });
 
 const client = await pool.connect();
 let stationSequenceByName = null;
+let stationTerminalNames = null;
 
 try {
   await client.query(await readFile(join(rootDir, "db", "schema.sql"), "utf8"));
@@ -60,7 +60,11 @@ try {
 }
 
 async function ingestStationOrder() {
-  const rows = await fetchSeoulRows("SearchSTNBySubwayLineInfo", ["", "", targetLineNo]);
+  const rows = await fetchSeoulRows("SearchSTNBySubwayLineInfo", [
+    "",
+    "",
+    Number.isFinite(Number(targetLineNo)) ? targetLineNo : ""
+  ]);
   const lineRows = rows
     .filter((row) => normalizeLineNo(pick(row, ["LINE_NUM", "호선"])) === targetLineNo)
     .sort((left, right) => stationOrder(left) - stationOrder(right));
@@ -220,7 +224,7 @@ async function ingestTransferDoors() {
     const lineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
     const stationName = normalizeStationName(pick(row, ["환승시작역", "station_name", "STATION_NM"]));
     const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
-    const direction = normalizeDirection(rawDirection) || (await inferDirectionFromStationText(stationName, rawDirection));
+    const direction = (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
     const carNo = intValue(pick(row, ["하차위치(호차)", "하차위치 호차", "car_no", "CAR_NO"]));
     const doorNo = intValue(pick(row, ["하차위치(문)", "하차위치 문", "door_no", "DOOR_NO"]));
 
@@ -253,7 +257,7 @@ async function ingestTransferDoors() {
   }
 
   if (count === 0) {
-    throw new Error("No transfer-door rows were ingested. Check TRANSFER_* source configuration.");
+    console.warn(`No transfer-door rows were ingested for line ${targetLineNo}.`);
   }
 
   return count;
@@ -272,7 +276,7 @@ async function ingestFastExitDoors() {
     );
     const rawDirection = pick(row, ["방향", "열차방면", "하차 열차 방면", "direction", "DIRECTION", "upbdnbSe"]);
     const direction =
-      normalizeDirection(rawDirection) ||
+      (await normalizeDirection(rawDirection)) ||
       (await inferDirectionFromStationText(stationName, pick(row, ["drtnInfo"])));
     const doorPosition = parseDoorPosition(pick(row, ["qckgffVhclDoorNo", "하차칸출입문", "하차위치"]));
     const carNo =
@@ -324,7 +328,7 @@ async function ingestFastExitDoors() {
   }
 
   if (count === 0) {
-    throw new Error("No fast-exit rows were ingested. Check FAST_EXIT_* source configuration.");
+    console.warn(`No fast-exit rows were ingested for line ${targetLineNo}.`);
   }
 
   return count;
@@ -334,7 +338,8 @@ async function ingestTrainLayout() {
   const rows = await fetchConfiguredRows("TRAIN_OPERATION");
   const row = rows.find((candidate) => normalizeLineNo(pick(candidate, ["호선", "LINE NAME", "line_no"])) === targetLineNo);
   if (!row) {
-    throw new Error(`No train-operation row found for line ${targetLineNo}.`);
+    console.warn(`No train-operation row found for line ${targetLineNo}.`);
+    return 0;
   }
 
   const carCount = intValue(
@@ -346,7 +351,8 @@ async function ingestTrainLayout() {
     ])
   );
   if (!carCount) {
-    throw new Error("Train-operation source did not include car count per formation.");
+    console.warn(`Train-operation source did not include car count for line ${targetLineNo}.`);
+    return 0;
   }
 
   const doorResult = await client.query(
@@ -362,11 +368,15 @@ async function ingestTrainLayout() {
   );
   const doorsPerCar = Number(doorResult.rows[0]?.doors_per_car);
   if (!doorsPerCar) {
-    throw new Error("Cannot derive doors_per_car from transfer/fast-exit door data.");
+    console.warn(`Cannot derive doors_per_car from door data for line ${targetLineNo}.`);
+    return 0;
   }
 
   let count = 0;
-  for (const direction of ["오금", "대화"]) {
+  for (const direction of [await defaultDirection("DOWN"), await defaultDirection("UP")]) {
+    if (!direction) {
+      continue;
+    }
     await client.query(
       `
         insert into train_layout (
@@ -404,7 +414,7 @@ async function ingestCongestionProfiles() {
       continue;
     }
 
-    const direction = normalizeDirection(pick(row, ["상하선구분", "상하구분", "방향", "direction", "DIRECTION"]));
+    const direction = await normalizeDirection(pick(row, ["상하선구분", "상하구분", "방향", "direction", "DIRECTION"]));
     const dayType = normalizeDayType(pick(row, ["요일구분", "요일", "day_type", "DAY_TYPE"]));
     if (!direction || !dayType) {
       continue;
@@ -451,7 +461,7 @@ async function ingestCongestionProfiles() {
   }
 
   if (count === 0) {
-    throw new Error("No congestion rows were ingested. Check CONGESTION_* source configuration.");
+    console.warn(`No congestion rows were ingested for line ${targetLineNo}.`);
   }
 
   return count;
@@ -647,68 +657,12 @@ async function fetchResource(url) {
         }
       });
     } catch (error) {
-      if (canRetryWithoutCertificateVerification(url, error)) {
-        return fetchWithHttpsRequest(url, {
-          accept: "application/json,text/csv,text/plain,*/*",
-          "user-agent": "seat-chance-ingest/0.1"
-        });
-      }
       lastError = error;
       await wait(250 * attempt);
     }
   }
 
   throw lastError;
-}
-
-function canRetryWithoutCertificateVerification(url, error) {
-  return (
-    url.includes("api.seoulmetro.co.kr:21000") &&
-    error instanceof Error &&
-    error.cause?.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE"
-  );
-}
-
-function fetchWithHttpsRequest(url, headers) {
-  return new Promise((resolve, reject) => {
-    const request = httpsRequest(
-      url,
-      {
-        headers,
-        rejectUnauthorized: false
-      },
-      (response) => {
-        const chunks = [];
-
-        response.on("data", (chunk) => {
-          chunks.push(chunk);
-        });
-        response.on("end", () => {
-          const body = Buffer.concat(chunks);
-          resolve({
-            ok: response.statusCode >= 200 && response.statusCode < 300,
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            headers: {
-              get(name) {
-                const value = response.headers[name.toLowerCase()];
-                return Array.isArray(value) ? value.join(",") : value ?? null;
-              }
-            },
-            async text() {
-              return body.toString("utf8");
-            },
-            async arrayBuffer() {
-              return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
-            }
-          });
-        });
-      }
-    );
-
-    request.on("error", reject);
-    request.end();
-  });
 }
 
 function wait(ms) {
@@ -809,31 +763,73 @@ function pick(row, keys) {
 
 function normalizeLineNo(value) {
   const text = stringValue(value);
+  const compact = text.replace(/\s/g, "");
+  if (compact.includes("공항")) {
+    return "공항철도";
+  }
+  if (compact.includes("경의") || compact.includes("중앙")) {
+    return "경의중앙";
+  }
+  if (compact.includes("경춘")) {
+    return "경춘";
+  }
+  if (compact.includes("수인") || compact.includes("분당")) {
+    return compact.includes("신분당") ? "신분당" : "수인분당";
+  }
+  if (compact.includes("우이") || compact.includes("신설")) {
+    return "우이신설";
+  }
+  if (compact.includes("서해")) {
+    return "서해";
+  }
+  if (compact.includes("김포")) {
+    return "김포골드";
+  }
+  if (compact.includes("신림")) {
+    return "신림";
+  }
   const match = text.match(/\d+/);
   if (!match) {
-    return "";
+    return compact
+      .replace(/수도권|서울|도시철도|경전철|전철/g, "")
+      .replace(/호선|노선|선$/g, "")
+      .trim();
   }
   return String(Number(match[0]));
+}
+
+function lineLabel(lineNo) {
+  if (/^\d+$/.test(lineNo)) {
+    return `${lineNo}호선`;
+  }
+  return lineNo.endsWith("철도") ? lineNo : `${lineNo}선`;
 }
 
 function normalizeStationName(value) {
   return stringValue(value).replace(/역$/, "").trim();
 }
 
-function normalizeDirection(value) {
+async function normalizeDirection(value) {
   const text = stringValue(value);
   const upperText = text.toUpperCase();
-  if (text.includes("오금")) {
-    return "오금";
+  const terminals = await getStationTerminalNames();
+  if (targetLineNo === "2" && text.includes("내선")) {
+    return "내선";
   }
-  if (text.includes("대화")) {
-    return "대화";
+  if (targetLineNo === "2" && text.includes("외선")) {
+    return "외선";
+  }
+  if (terminals.forward && text.includes(terminals.forward)) {
+    return terminals.forward;
+  }
+  if (terminals.reverse && text.includes(terminals.reverse)) {
+    return terminals.reverse;
   }
   if (text === "하선" || text.includes("하행") || upperText === "DOWN" || upperText === "DN") {
-    return process.env.LINE3_DOWN_DIRECTION ?? defaultDirection("DOWN");
+    return defaultDirection("DOWN");
   }
   if (text === "상선" || text.includes("상행") || upperText === "UP") {
-    return process.env.LINE3_UP_DIRECTION ?? defaultDirection("UP");
+    return defaultDirection("UP");
   }
   return "";
 }
@@ -857,13 +853,16 @@ function normalizeCongestionTimeSlot(key) {
   }
   const hour = Number(hourMinute[1]);
   if (hour === 24) {
-    return "00:00";
+    return "23:30";
   }
   if (hour < 0 || hour > 23) {
     return "";
   }
   const minute = Number(hourMinute[2] ?? 0);
   const roundedMinute = minute < 15 ? 0 : minute < 45 ? 30 : 60;
+  if (hour === 23 && roundedMinute === 60) {
+    return "23:30";
+  }
   const nextHour = (hour + (roundedMinute === 60 ? 1 : 0)) % 24;
   const nextMinute = roundedMinute === 60 ? 0 : roundedMinute;
   return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
@@ -887,7 +886,7 @@ async function exportTransitLines() {
     if (!line) {
       line = {
         line_no: row.line_no,
-        label: `${row.line_no}호선`,
+        label: lineLabel(row.line_no),
         stations: []
       };
       lines.push(line);
@@ -932,7 +931,7 @@ async function inferDirectionFromStationText(stationName, directionText) {
     if (candidateName === stationName || !text.includes(candidateName)) {
       continue;
     }
-    return candidateSequence > currentSequence ? "오금" : "대화";
+    return candidateSequence > currentSequence ? await defaultDirection("DOWN") : await defaultDirection("UP");
   }
 
   return "";
@@ -1033,11 +1032,33 @@ function redactUrl(url) {
   return redacted;
 }
 
-function defaultDirection(bound) {
-  if (targetLineNo !== "3") {
-    return "";
+async function defaultDirection(bound) {
+  const terminals = await getStationTerminalNames();
+  if (targetLineNo === "2") {
+    return bound === "DOWN" ? "내선" : "외선";
   }
-  return bound === "DOWN" ? "오금" : "대화";
+  return bound === "DOWN" ? terminals.forward : terminals.reverse;
+}
+
+async function getStationTerminalNames() {
+  if (stationTerminalNames) {
+    return stationTerminalNames;
+  }
+
+  const result = await client.query(
+    `
+      select station_name, sequence_no
+      from station_line_order
+      where operator = $1 and line_no = $2
+      order by sequence_no
+    `,
+    [operator, targetLineNo]
+  );
+  stationTerminalNames = {
+    reverse: result.rows[0]?.station_name ?? "",
+    forward: result.rows.at(-1)?.station_name ?? ""
+  };
+  return stationTerminalNames;
 }
 
 function requiredEnv(name) {

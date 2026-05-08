@@ -13,7 +13,7 @@ create table if not exists train_layout (
   operator text not null,
   line_no text not null,
   branch_code text not null default 'MAIN',
-  direction_code text not null check (direction_code in ('오금', '대화')),
+  direction_code text not null,
   car_count integer not null check (car_count > 0),
   doors_per_car integer not null check (doors_per_car > 0),
   source text not null,
@@ -38,7 +38,7 @@ create table if not exists ridership_profile (
 
 create table if not exists congestion_profile (
   line_no text not null,
-  direction_code text not null check (direction_code in ('오금', '대화')),
+  direction_code text not null,
   day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
   time_slot text not null check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$'),
   congestion_pct numeric(5, 2) not null check (congestion_pct >= 0),
@@ -51,7 +51,7 @@ create table if not exists congestion_profile (
 create table if not exists transfer_door (
   line_no text not null,
   station_name text not null,
-  direction_code text not null check (direction_code in ('오금', '대화')),
+  direction_code text not null,
   car_no integer not null check (car_no > 0),
   door_no integer not null check (door_no > 0),
   weight numeric(4, 3) not null check (weight >= 0 and weight <= 1),
@@ -64,7 +64,7 @@ create table if not exists transfer_door (
 create table if not exists exit_or_facility_door (
   line_no text not null,
   station_name text not null,
-  direction_code text not null check (direction_code in ('오금', '대화')),
+  direction_code text not null,
   car_no integer not null check (car_no > 0),
   door_no integer not null check (door_no > 0),
   weight numeric(4, 3) not null check (weight >= 0 and weight <= 1),
@@ -122,3 +122,15 @@ alter table congestion_profile
 alter table congestion_profile
   add constraint congestion_profile_time_slot_check
   check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$');
+
+alter table train_layout
+  drop constraint if exists train_layout_direction_code_check;
+
+alter table congestion_profile
+  drop constraint if exists congestion_profile_direction_code_check;
+
+alter table transfer_door
+  drop constraint if exists transfer_door_direction_code_check;
+
+alter table exit_or_facility_door
+  drop constraint if exists exit_or_facility_door_direction_code_check;

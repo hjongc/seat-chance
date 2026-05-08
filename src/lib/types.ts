@@ -1,4 +1,4 @@
-export type DirectionCode = "오금" | "대화";
+export type DirectionCode = string;
 export type DayType = "WEEKDAY" | "WEEKEND";
 export type RecommendationMode = "seat";
 export type DoorHintKind = "transfer" | "facility";
@@ -94,4 +94,3 @@ export interface RecommendationResponse {
   recommendations: Recommendation[];
   cautions: string[];
 }
-
