@@ -67,6 +67,13 @@ function toDataStatusPayload(status: Awaited<ReturnType<typeof getDataStatus>>) 
           status: status.lastIngestion.status,
           finished_at: status.lastIngestion.finishedAt
         }
+      : null,
+    last_successful_ingestion: status.lastSuccessfulIngestion
+      ? {
+          source_name: status.lastSuccessfulIngestion.sourceName,
+          row_count: status.lastSuccessfulIngestion.rowCount,
+          finished_at: status.lastSuccessfulIngestion.finishedAt
+        }
       : null
   };
 }

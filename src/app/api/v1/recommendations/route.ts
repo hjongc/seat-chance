@@ -27,11 +27,26 @@ export async function GET(request: Request) {
       direction = inferDirection(stations, input.origin, input.destination);
     }
 
+    const dayType = toDayType(datetime);
+    const timeSlot = toTimeSlot(datetime);
+    const cacheKey = recommendationCacheKey({
+      origin: input.origin,
+      destination: input.destination,
+      lineNo,
+      direction,
+      dayType,
+      timeSlot
+    });
+    const cached = await repository.getCachedRecommendation(cacheKey, recommendationCacheTtlSeconds());
+    if (cached) {
+      return cachedJsonResponse(cached, "public, max-age=60, s-maxage=600, stale-while-revalidate=3600");
+    }
+
     const dataset = await repository.getDataset({
       lineNo,
       direction,
-      dayType: toDayType(datetime),
-      timeSlot: toTimeSlot(datetime)
+      dayType,
+      timeSlot
     });
     const recommendation = recommendSeatPositions(
       {
@@ -44,25 +59,58 @@ export async function GET(request: Request) {
       (candidate) => candidate.lineNo === lineNo && candidate.direction === direction
     );
 
-    return cachedJsonResponse(
-      {
-        ...recommendation,
-        train_layout: layout
-          ? {
-              line_no: layout.lineNo,
-              direction: layout.direction,
-              car_count: layout.carCount,
-              doors_per_car: layout.doorsPerCar,
-              source: layout.source,
-              confidence: layout.confidence
-            }
-          : null
-      },
-      "public, max-age=60, s-maxage=600, stale-while-revalidate=3600"
-    );
+    const payload = {
+      ...recommendation,
+      train_layout: layout
+        ? {
+            line_no: layout.lineNo,
+            direction: layout.direction,
+            car_count: layout.carCount,
+            doors_per_car: layout.doorsPerCar,
+            source: layout.source,
+            confidence: layout.confidence
+          }
+        : null
+    };
+
+    await repository.setCachedRecommendation({
+      cacheKey,
+      origin: input.origin,
+      destination: input.destination,
+      lineNo,
+      direction,
+      dayType,
+      timeSlot,
+      payload
+    });
+
+    return cachedJsonResponse(payload, "public, max-age=60, s-maxage=600, stale-while-revalidate=3600");
   } catch (error) {
     return errorResponse(error);
   }
+}
+
+function recommendationCacheTtlSeconds() {
+  const ttl = Number(process.env.RECOMMENDATION_CACHE_TTL_SECONDS ?? 86400);
+  return Number.isFinite(ttl) && ttl > 0 ? ttl : 86400;
+}
+
+function recommendationCacheKey({
+  origin,
+  destination,
+  lineNo,
+  direction,
+  dayType,
+  timeSlot
+}: {
+  origin: string;
+  destination: string;
+  lineNo: string;
+  direction: DirectionCode;
+  dayType: string;
+  timeSlot: string;
+}) {
+  return ["seat-v1", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }
 
 function inferDirection(
