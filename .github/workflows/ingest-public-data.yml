@@ -46,6 +46,7 @@ jobs:
       - run: npm run db:ingest
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NODE_OPTIONS: --use-system-ca
           SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
           SEOUL_REALTIME_SUBWAY_API_KEY: ${{ secrets.SEOUL_REALTIME_SUBWAY_API_KEY }}
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}

@@ -49,10 +49,10 @@ try {
 
   await ingestWithLog("서울 열린데이터광장 SearchSTNBySubwayLineInfo", null, ingestStationOrder);
   await ingestWithLog("서울 열린데이터광장 CardSubwayTime", null, ingestRidershipProfiles);
-  await ingestWithLog("서울교통공사 도시철도 환승정보", sourceUrl("TRANSFER"), ingestTransferDoors);
-  await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors);
-  await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout);
-  await ingestWithLog("서울교통공사 지하철혼잡도정보", sourceUrl("CONGESTION"), ingestCongestionProfiles);
+  await ingestWithLog("서울교통공사 도시철도 환승정보", sourceUrl("TRANSFER"), ingestTransferDoors, { optional: true });
+  await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors, { optional: true });
+  await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout, { optional: true });
+  await ingestWithLog("서울교통공사 지하철혼잡도정보", sourceUrl("CONGESTION"), ingestCongestionProfiles, { optional: true });
   await exportTransitLines();
 } finally {
   client.release();
@@ -467,7 +467,7 @@ async function ingestCongestionProfiles() {
   return count;
 }
 
-async function ingestWithLog(sourceName, sourceUrlValue, fn) {
+async function ingestWithLog(sourceName, sourceUrlValue, fn, options = {}) {
   const run = await client.query(
     `
       insert into ingestion_run (source_name, source_url, status)
@@ -490,14 +490,19 @@ async function ingestWithLog(sourceName, sourceUrlValue, fn) {
     );
     console.log(`${sourceName}: ${rowCount} rows`);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     await client.query(
       `
         update ingestion_run
         set status = 'FAILED', message = $2, finished_at = now()
         where id = $1
       `,
-      [runId, error instanceof Error ? error.message : String(error)]
+      [runId, message]
     );
+    if (options.optional) {
+      console.warn(`${sourceName}: skipped optional source: ${message}`);
+      return 0;
+    }
     throw error;
   }
 }
