@@ -57,7 +57,7 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           TARGET_LINE_NO: ${{ matrix.target_line_no }}
           TARGET_MONTH: ${{ inputs.target_month }}
-          INGEST_REQUEST_TIMEOUT_MS: 30000
+          INGEST_REQUEST_TIMEOUT_MS: 60000
           INGEST_FETCH_ATTEMPTS: 3
           TRANSFER_CSV_URL: ${{ secrets.TRANSFER_CSV_URL }}
           TRANSFER_API_URL_TEMPLATE: ${{ secrets.TRANSFER_API_URL_TEMPLATE }}
