@@ -12,7 +12,7 @@ on:
 jobs:
   ingest:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -43,7 +43,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: timeout 8m npm run db:ingest
+      - run: npm run db:ingest
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SEOUL_OPEN_API_KEY: ${{ secrets.SEOUL_OPEN_API_KEY }}
