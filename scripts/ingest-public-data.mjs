@@ -1,4 +1,5 @@
 import { mkdir, rename, readFile, writeFile } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -8,11 +9,14 @@ const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 await loadLocalEnv();
 
 const operator = "서울교통공사";
-const targetLineNo = normalizeLineNo(process.env.TARGET_LINE_NO ?? "3");
+let targetLineNo = "3";
 const targetMonth = process.env.TARGET_MONTH || previousKstMonth();
 const seoulApiKey = requiredEnv("SEOUL_OPEN_API_KEY");
 const dataGoKrApiKey = process.env.DATA_GO_KR_API_KEY ?? "";
 const databaseUrl = requiredEnv("DATABASE_URL");
+const configuredTargetLineNos = parseTargetLineNos(process.env.TARGET_LINE_NO);
+const ingestFetchTimeoutMs = toPositiveInt(process.env.INGEST_REQUEST_TIMEOUT_MS, 25000);
+const ingestFetchAttempts = Math.min(Math.max(toPositiveInt(process.env.INGEST_FETCH_ATTEMPTS, 3), 1), 8);
 const defaultCsvUrls = {
   TRANSFER:
     "https://www.data.go.kr/cmm/cmm/fileDownload.do?atchFileId=FILE_000000003605050&fileDetailSn=1&insertDataPrcus=N",
@@ -47,19 +51,79 @@ let stationTerminalNames = null;
 try {
   await client.query(await readFile(join(rootDir, "db", "schema.sql"), "utf8"));
 
-  await ingestWithLog("서울 열린데이터광장 SearchSTNBySubwayLineInfo", null, ingestStationOrder);
-  await ingestWithLog("서울 열린데이터광장 CardSubwayTime", null, ingestRidershipProfiles);
-  await ingestWithLog("서울교통공사 도시철도 환승정보", sourceUrl("TRANSFER"), ingestTransferDoors, { optional: true });
-  await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors, { optional: true });
-  await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout, { optional: true });
-  await ingestWithLog("서울교통공사 지하철혼잡도정보", sourceUrl("CONGESTION"), ingestCongestionProfiles, { optional: true });
+  const targetLineNos = await resolveTargetLines();
+  const failedLines = [];
+
+  for (const lineNo of targetLineNos) {
+    targetLineNo = lineNo;
+    stationSequenceByName = null;
+    stationTerminalNames = null;
+    console.log(`\nStart ingest for line ${targetLineNo}`);
+
+    try {
+      await ingestWithLog("서울 열린데이터광장 SearchSTNBySubwayLineInfo", null, ingestStationOrder);
+      await ingestWithLog("서울 열린데이터광장 CardSubwayTime", null, ingestRidershipProfiles);
+      await ingestWithLog("서울교통공사 도시철도 환승정보", sourceUrl("TRANSFER"), ingestTransferDoors, { optional: true });
+      await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors, { optional: true });
+      await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout, { optional: true });
+      await ingestWithLog("서울교통공사 지하철혼잡도정보", sourceUrl("CONGESTION"), ingestCongestionProfiles, { optional: true });
+      console.log(`Completed ingest for line ${targetLineNo}`);
+    } catch (error) {
+      failedLines.push({ lineNo: targetLineNo, reason: error instanceof Error ? error.message : String(error) });
+      console.error(`Line ${targetLineNo} failed: ${failedLines.at(-1).reason}`);
+    }
+  }
+
+  if (failedLines.length > 0) {
+    throw new Error(
+      `Ingest failed for ${failedLines.length} line(s): ${failedLines
+        .map((item) => `${item.lineNo}(${item.reason})`)
+        .join(", ")}`
+    );
+  }
+
   await exportTransitLines();
 } finally {
   client.release();
   await pool.end();
 }
 
+async function resolveTargetLines() {
+  if (configuredTargetLineNos.length > 0) {
+    return configuredTargetLineNos;
+  }
+
+  const rows = await fetchSeoulRows("SearchSTNBySubwayLineInfo", []);
+  const discovered = new Set();
+
+  for (const row of rows) {
+    const lineNo = normalizeLineNo(pick(row, ["LINE_NUM", "호선", "LINE"]));
+    if (lineNo) {
+      discovered.add(lineNo);
+    }
+  }
+
+  const discoveredLines = Array.from(discovered).sort((a, b) => Number(a) - Number(b));
+  return discoveredLines.length > 0 ? discoveredLines : ["3"];
+}
+
+function parseTargetLineNos(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  const explicitLines = raw
+    .split(/[,\s;]+/)
+    .map((line) => stringValue(line))
+    .filter(Boolean)
+    .map((line) => normalizeLineNo(line))
+    .filter(Boolean);
+
+  return [...new Set(explicitLines)].sort((a, b) => Number(a) - Number(b));
+}
+
 async function ingestStationOrder() {
+  await client.query("delete from station_line_order where operator = $1 and line_no = $2", [operator, targetLineNo]);
   const rows = await fetchSeoulRows("SearchSTNBySubwayLineInfo", [
     "",
     "",
@@ -103,6 +167,10 @@ async function ingestRidershipProfiles() {
   const hourFields = ridershipHourFields();
   const observedMonth = `${month.slice(0, 4)}-${month.slice(4, 6)}-01`;
   const source = `서울 열린데이터광장 CardSubwayTime ${month} monthly day-type aggregate`;
+  await client.query(
+    `delete from ridership_profile where line_no = $1 and observed_month = $2`,
+    [targetLineNo, observedMonth]
+  );
   let count = 0;
 
   for (const row of lineRows) {
@@ -265,6 +333,7 @@ async function ingestTransferDoors() {
 
 async function ingestFastExitDoors() {
   const rows = await fetchConfiguredRows("FAST_EXIT");
+  await client.query("delete from exit_or_facility_door where line_no = $1", [targetLineNo]);
   let count = 0;
 
   for (const row of rows) {
@@ -328,7 +397,10 @@ async function ingestFastExitDoors() {
   }
 
   if (count === 0) {
-    console.warn(`No fast-exit rows were ingested for line ${targetLineNo}.`);
+    console.warn(
+      `No fast-exit rows were ingested for line ${targetLineNo}. Data source may not cover this line yet.`
+    );
+    return 0;
   }
 
   return count;
@@ -336,6 +408,7 @@ async function ingestFastExitDoors() {
 
 async function ingestTrainLayout() {
   const rows = await fetchConfiguredRows("TRAIN_OPERATION");
+  await client.query("delete from train_layout where operator = $1 and line_no = $2", [operator, targetLineNo]);
   const row = rows.find((candidate) => normalizeLineNo(pick(candidate, ["호선", "LINE NAME", "line_no"])) === targetLineNo);
   if (!row) {
     console.warn(`No train-operation row found for line ${targetLineNo}.`);
@@ -351,7 +424,7 @@ async function ingestTrainLayout() {
     ])
   );
   if (!carCount) {
-    console.warn(`Train-operation source did not include car count for line ${targetLineNo}.`);
+    console.warn(`Train-operation source did not include car count per formation for line ${targetLineNo}.`);
     return 0;
   }
 
@@ -368,7 +441,7 @@ async function ingestTrainLayout() {
   );
   const doorsPerCar = Number(doorResult.rows[0]?.doors_per_car);
   if (!doorsPerCar) {
-    console.warn(`Cannot derive doors_per_car from door data for line ${targetLineNo}.`);
+    console.warn(`Cannot derive doors_per_car from transfer/fast-exit door data for line ${targetLineNo}.`);
     return 0;
   }
 
@@ -406,6 +479,7 @@ async function ingestTrainLayout() {
 
 async function ingestCongestionProfiles() {
   const rows = await fetchConfiguredRows("CONGESTION");
+  await client.query("delete from congestion_profile where line_no = $1", [targetLineNo]);
   const aggregated = new Map();
 
   for (const row of rows) {
@@ -462,6 +536,7 @@ async function ingestCongestionProfiles() {
 
   if (count === 0) {
     console.warn(`No congestion rows were ingested for line ${targetLineNo}.`);
+    return 0;
   }
 
   return count;
@@ -508,7 +583,8 @@ async function ingestWithLog(sourceName, sourceUrlValue, fn, options = {}) {
 }
 
 async function fetchSeoulRows(service, tailSegments = []) {
-  const firstUrl = seoulUrl(service, 1, 1000, tailSegments);
+  const safeTailSegments = tailSegments.filter((segment) => String(segment).trim() !== "");
+  const firstUrl = seoulUrl(service, 1, 1000, safeTailSegments);
   const first = await fetchJson(firstUrl);
   const payload = first[service] ?? first[Object.keys(first)[0]];
   assertSeoulPayload(payload, firstUrl);
@@ -520,7 +596,7 @@ async function fetchSeoulRows(service, tailSegments = []) {
   }
 
   for (let start = 1001; start <= total; start += 1000) {
-    const nextUrl = seoulUrl(service, start, Math.min(start + 999, total), tailSegments);
+    const nextUrl = seoulUrl(service, start, Math.min(start + 999, total), safeTailSegments);
     const next = await fetchJson(nextUrl);
     const nextPayload = next[service] ?? next[Object.keys(next)[0]];
     assertSeoulPayload(nextPayload, nextUrl);
@@ -611,6 +687,7 @@ function extractTotalCount(payload) {
 }
 
 function seoulUrl(service, start, end, tailSegments) {
+  const filteredSegments = (tailSegments ?? []).filter((segment) => String(segment).trim() !== "");
   return [
     "http://openapi.seoul.go.kr:8088",
     encodeURIComponent(seoulApiKey),
@@ -618,7 +695,7 @@ function seoulUrl(service, start, end, tailSegments) {
     service,
     String(start),
     String(end),
-    ...tailSegments.map((segment) => encodeURIComponent(segment))
+    ...filteredSegments.map((segment) => encodeURIComponent(segment))
   ].join("/");
 }
 
@@ -653,22 +730,98 @@ async function fetchJson(url) {
 
 async function fetchResource(url) {
   let lastError = null;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= ingestFetchAttempts; attempt += 1) {
+    const requestId = `${targetLineNo || "unknown"}-${attempt}`;
+    console.log(`[fetch:${requestId}] ${redactUrl(url)} (timeout: ${ingestFetchTimeoutMs}ms)`);
     try {
-      return await fetch(url, {
-        signal: AbortSignal.timeout(Number(process.env.INGEST_FETCH_TIMEOUT_MS ?? 5000)),
+      return await fetchWithTimeout(url, {
         headers: {
           accept: "application/json,text/csv,text/plain,*/*",
           "user-agent": "seat-chance-ingest/0.1"
-        }
+        },
+        timeoutMs: ingestFetchTimeoutMs
       });
     } catch (error) {
+      if (canRetryWithoutCertificateVerification(url, error)) {
+        return fetchWithHttpsRequest(url, {
+          accept: "application/json,text/csv,text/plain,*/*",
+          "user-agent": "seat-chance-ingest/0.1"
+        });
+      }
       lastError = error;
-      await wait(250 * attempt);
+      if (attempt < ingestFetchAttempts) {
+        await wait(250 * attempt);
+      }
     }
   }
 
-  throw lastError;
+  if (lastError instanceof Error) {
+    throw lastError;
+  }
+  throw new Error(`Failed to fetch ${redactUrl(url)} after ${ingestFetchAttempts} attempts`);
+}
+
+async function fetchWithTimeout(url, { headers, timeoutMs }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      headers,
+      signal: controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function canRetryWithoutCertificateVerification(url, error) {
+  return (
+    url.includes("api.seoulmetro.co.kr:21000") &&
+    error instanceof Error &&
+    error.cause?.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE"
+  );
+}
+
+function fetchWithHttpsRequest(url, headers) {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(
+      url,
+      {
+        headers,
+        rejectUnauthorized: false
+      },
+      (response) => {
+        const chunks = [];
+
+        response.on("data", (chunk) => {
+          chunks.push(chunk);
+        });
+        response.on("end", () => {
+          const body = Buffer.concat(chunks);
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode ?? 0,
+            statusText: response.statusMessage ?? "",
+            headers: {
+              get(name) {
+                const value = response.headers[name.toLowerCase()];
+                return Array.isArray(value) ? value.join(",") : value ?? null;
+              }
+            },
+            async text() {
+              return body.toString("utf8");
+            },
+            async arrayBuffer() {
+              return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
+            }
+          });
+        });
+      }
+    );
+
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 function wait(ms) {
@@ -812,17 +965,22 @@ function lineLabel(lineNo) {
 }
 
 function normalizeStationName(value) {
-  return stringValue(value).replace(/역$/, "").trim();
+  return stringValue(value)
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/역$/, "")
+    .trim();
 }
 
 async function normalizeDirection(value) {
   const text = stringValue(value);
+  const compact = text.replace(/\s+/g, "");
   const upperText = text.toUpperCase();
   const terminals = await getStationTerminalNames();
-  if (targetLineNo === "2" && text.includes("내선")) {
+  if (targetLineNo === "2" && compact.includes("내선")) {
     return "내선";
   }
-  if (targetLineNo === "2" && text.includes("외선")) {
+  if (targetLineNo === "2" && compact.includes("외선")) {
     return "외선";
   }
   if (terminals.forward && text.includes(terminals.forward)) {
@@ -832,10 +990,10 @@ async function normalizeDirection(value) {
     return terminals.reverse;
   }
   if (text === "하선" || text.includes("하행") || upperText === "DOWN" || upperText === "DN") {
-    return defaultDirection("DOWN");
+    return configuredDirection("DOWN");
   }
   if (text === "상선" || text.includes("상행") || upperText === "UP") {
-    return defaultDirection("UP");
+    return configuredDirection("UP");
   }
   return "";
 }
@@ -1002,7 +1160,9 @@ function intValue(value) {
 }
 
 function numberValue(value) {
-  const numeric = Number(stringValue(value).replace(/,/g, ""));
+  const text = stringValue(value).replace(/,/g, "");
+  const match = text.match(/-?\d+(?:\.\d+)?/);
+  const numeric = match ? Number(match[0]) : Number.NaN;
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
@@ -1065,6 +1225,23 @@ async function getStationTerminalNames() {
     forward: result.rows.at(-1)?.station_name ?? ""
   };
   return stationTerminalNames;
+}
+
+async function configuredDirection(bound) {
+  const lineSpecificUp = process.env[`LINE${targetLineNo}_UP_DIRECTION`];
+  const lineSpecificDown = process.env[`LINE${targetLineNo}_DOWN_DIRECTION`];
+  if (bound === "UP") {
+    return lineSpecificUp || process.env.UP_DIRECTION || (await defaultDirection("UP"));
+  }
+  if (bound === "DOWN") {
+    return lineSpecificDown || process.env.DOWN_DIRECTION || (await defaultDirection("DOWN"));
+  }
+  return "";
+}
+
+function toPositiveInt(raw, fallback) {
+  const num = Number.parseInt(raw ?? "", 10);
+  return Number.isFinite(num) && num > 0 ? num : fallback;
 }
 
 function requiredEnv(name) {

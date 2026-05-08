@@ -6,6 +6,9 @@ on:
       target_month:
         description: "YYYYMM month for Seoul CardSubwayTime"
         required: false
+      target_line_no:
+        description: "Comma-separated matrix line targets. Empty value runs all matrix targets"
+        required: false
   schedule:
     - cron: "15 19 5 * *"
 
@@ -44,6 +47,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run db:ingest
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target_line_no == '' || contains(format(',{0},', inputs.target_line_no), format(',{0},', matrix.target_line_no)) }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NODE_OPTIONS: --use-system-ca
@@ -53,6 +57,8 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           TARGET_LINE_NO: ${{ matrix.target_line_no }}
           TARGET_MONTH: ${{ inputs.target_month }}
+          INGEST_REQUEST_TIMEOUT_MS: 30000
+          INGEST_FETCH_ATTEMPTS: 3
           TRANSFER_CSV_URL: ${{ secrets.TRANSFER_CSV_URL }}
           TRANSFER_API_URL_TEMPLATE: ${{ secrets.TRANSFER_API_URL_TEMPLATE }}
           FAST_EXIT_API_URL_TEMPLATE: ${{ secrets.FAST_EXIT_API_URL_TEMPLATE }}
@@ -60,3 +66,24 @@ jobs:
           TRAIN_OPERATION_API_URL_TEMPLATE: ${{ secrets.TRAIN_OPERATION_API_URL_TEMPLATE }}
           CONGESTION_CSV_URL: ${{ secrets.CONGESTION_CSV_URL }}
           CONGESTION_API_URL_TEMPLATE: ${{ secrets.CONGESTION_API_URL_TEMPLATE }}
+          LINE3_UP_DIRECTION: ${{ secrets.LINE3_UP_DIRECTION }}
+          LINE3_DOWN_DIRECTION: ${{ secrets.LINE3_DOWN_DIRECTION }}
+          UP_DIRECTION: ${{ secrets.UP_DIRECTION }}
+          DOWN_DIRECTION: ${{ secrets.DOWN_DIRECTION }}
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${ALERT_WEBHOOK_URL}" ]; then
+            echo "ALERT_WEBHOOK_URL is not set; skip notification."
+            exit 0
+          fi
+          payload=$(cat <<JSON
+          {"text":"⚠️ seat-chance db ingest failed. Repo: ${REPO}\nRun: ${RUN_URL}"}
+          JSON
+          )
+          curl -fsSL -X POST -H "Content-Type: application/json" -d "$payload" "$ALERT_WEBHOOK_URL"
