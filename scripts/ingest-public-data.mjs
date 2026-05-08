@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, rename, readFile, writeFile } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,9 @@ const defaultApiTemplates = {
 
 const pool = new Pool({
   connectionString: databaseUrl,
+  max: 1,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 10000,
   ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
 });
 
@@ -48,6 +51,7 @@ try {
   await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors);
   await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout);
   await ingestWithLog("서울교통공사 지하철혼잡도정보", sourceUrl("CONGESTION"), ingestCongestionProfiles);
+  await exportTransitLines();
 } finally {
   client.release();
   await pool.end();
@@ -90,40 +94,37 @@ async function ingestStationOrder() {
 
 async function ingestRidershipProfiles() {
   const { month, lineRows } = await fetchRidershipRows();
-  const hourFields = [
-    ["07:00", ["SEVEN_RIDE_NUM", "HR_7_GET_ON_NOPE"], ["SEVEN_ALIGHT_NUM", "HR_7_GET_OFF_NOPE"]],
-    ["08:00", ["EIGHT_RIDE_NUM", "HR_8_GET_ON_NOPE"], ["EIGHT_ALIGHT_NUM", "HR_8_GET_OFF_NOPE"]],
-    ["09:00", ["NINE_RIDE_NUM", "HR_9_GET_ON_NOPE"], ["NINE_ALIGHT_NUM", "HR_9_GET_OFF_NOPE"]]
-  ];
+  const hourFields = ridershipHourFields();
   const observedMonth = `${month.slice(0, 4)}-${month.slice(4, 6)}-01`;
-  const source = `서울 열린데이터광장 CardSubwayTime ${month}`;
+  const source = `서울 열린데이터광장 CardSubwayTime ${month} monthly day-type aggregate`;
   let count = 0;
 
   for (const row of lineRows) {
     const stationName = normalizeStationName(pick(row, ["SUB_STA_NM", "역명", "STTN"]));
+    const dayTypes = ridershipDayTypes(row);
     for (const [timeSlot, rideKeys, alightKeys] of hourFields) {
-      await client.query(
-        `
-          insert into ridership_profile (
-            line_no, station_name, day_type, time_slot, boardings, alightings, source, observed_month
-          ) values ($1, $2, 'WEEKDAY', $3, $4, $5, $6, $7)
-          on conflict (line_no, station_name, day_type, time_slot, observed_month) do update set
-            boardings = excluded.boardings,
-            alightings = excluded.alightings,
-            source = excluded.source,
-            ingested_at = now()
-        `,
-        [
-          targetLineNo,
-          stationName,
-          timeSlot,
-          intValue(pick(row, rideKeys)),
-          intValue(pick(row, alightKeys)),
-          source,
-          observedMonth
-        ]
-      );
-      count += 1;
+      const boardings = intValue(pick(row, rideKeys));
+      const alightings = intValue(pick(row, alightKeys));
+      if (boardings <= 0 && alightings <= 0) {
+        continue;
+      }
+
+      for (const dayType of dayTypes) {
+        await client.query(
+          `
+            insert into ridership_profile (
+              line_no, station_name, day_type, time_slot, boardings, alightings, source, observed_month
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            on conflict (line_no, station_name, day_type, time_slot, observed_month) do update set
+              boardings = excluded.boardings,
+              alightings = excluded.alightings,
+              source = excluded.source,
+              ingested_at = now()
+          `,
+          [targetLineNo, stationName, dayType, timeSlot, boardings, alightings, source, observedMonth]
+        );
+        count += 1;
+      }
     }
   }
 
@@ -132,6 +133,66 @@ async function ingestRidershipProfiles() {
   }
 
   return count;
+}
+
+function ridershipHourFields() {
+  return Array.from({ length: 24 }, (_, hour) => {
+    const timeSlot = `${String(hour).padStart(2, "0")}:00`;
+    const legacy = legacyHourName(hour);
+    const sourceHour = hour === 0 ? 24 : hour;
+    return [
+      timeSlot,
+      [
+        `HR_${sourceHour}_GET_ON_NOPE`,
+        `HR_${String(sourceHour).padStart(2, "0")}_GET_ON_NOPE`,
+        `HR_${hour}_GET_ON_NOPE`,
+        `HR_${String(hour).padStart(2, "0")}_GET_ON_NOPE`,
+        `${legacy}_RIDE_NUM`
+      ],
+      [
+        `HR_${sourceHour}_GET_OFF_NOPE`,
+        `HR_${String(sourceHour).padStart(2, "0")}_GET_OFF_NOPE`,
+        `HR_${hour}_GET_OFF_NOPE`,
+        `HR_${String(hour).padStart(2, "0")}_GET_OFF_NOPE`,
+        `${legacy}_ALIGHT_NUM`
+      ]
+    ];
+  });
+}
+
+function legacyHourName(hour) {
+  const names = {
+    0: "MIDNIGHT",
+    1: "ONE",
+    2: "TWO",
+    3: "THREE",
+    4: "FOUR",
+    5: "FIVE",
+    6: "SIX",
+    7: "SEVEN",
+    8: "EIGHT",
+    9: "NINE",
+    10: "TEN",
+    11: "ELEVEN",
+    12: "TWELVE",
+    13: "THIRTEEN",
+    14: "FOURTEEN",
+    15: "FIFTEEN",
+    16: "SIXTEEN",
+    17: "SEVENTEEN",
+    18: "EIGHTEEN",
+    19: "NINETEEN",
+    20: "TWENTY",
+    21: "TWENTY_ONE",
+    22: "TWENTY_TWO",
+    23: "TWENTY_THREE"
+  };
+  return names[hour] ?? "";
+}
+
+function ridershipDayTypes(row) {
+  const explicitDayType = normalizeDayType(pick(row, ["요일구분", "요일", "day_type", "DAY_TYPE"]));
+  return explicitDayType ? [explicitDayType] : ["WEEKDAY", "WEEKEND"];
 }
 
 async function fetchRidershipRows() {
@@ -792,10 +853,51 @@ function normalizeCongestionTimeSlot(key) {
     return "";
   }
   const hour = Number(hourMinute[1]);
-  if (hour < 7 || hour > 9) {
+  if (hour === 24) {
+    return "00:00";
+  }
+  if (hour < 0 || hour > 23) {
     return "";
   }
   return `${String(hour).padStart(2, "0")}:00`;
+}
+
+async function exportTransitLines() {
+  const result = await client.query(
+    `
+      select line_no, station_code, station_name, sequence_no
+      from station_line_order
+      order by
+        case when line_no ~ '^[0-9]+$' then line_no::int else 999999 end,
+        line_no,
+        sequence_no
+    `
+  );
+  const lines = [];
+
+  for (const row of result.rows) {
+    let line = lines.find((candidate) => candidate.line_no === row.line_no);
+    if (!line) {
+      line = {
+        line_no: row.line_no,
+        label: `${row.line_no}호선`,
+        stations: []
+      };
+      lines.push(line);
+    }
+
+    line.stations.push({
+      station_code: row.station_code,
+      station_name: row.station_name,
+      sequence_no: Number(row.sequence_no)
+    });
+  }
+
+  const outputPath = join(rootDir, "public", "transit-lines.json");
+  await mkdir(dirname(outputPath), { recursive: true });
+  await writeFile(`${outputPath}.tmp`, `${JSON.stringify({ generated_at: new Date().toISOString(), lines }, null, 2)}\n`);
+  await rename(`${outputPath}.tmp`, outputPath);
+  console.log(`transit-lines.json: ${lines.length} lines`);
 }
 
 function stationOrder(row) {

@@ -3,10 +3,8 @@
 import {
   AlertCircle,
   Clock3,
-  Database,
   MapPin,
   Search,
-  Settings,
   TrainFront
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -47,33 +45,20 @@ interface TrainLayoutResponse {
   confidence: number;
 }
 
-interface DataStatusResponse {
-  ready: boolean;
-  status: "READY" | "MISSING_DATABASE_URL" | "DATABASE_ERROR" | "SCHEMA_MISSING" | "DATA_MISSING";
-  message: string;
-  last_ingestion: {
-    source_name: string;
-    status: string;
-    finished_at: string | null;
-  } | null;
-}
-
 interface LineOption {
   line_no: string;
-  station_count: number;
-}
-
-interface BootstrapResponse {
-  data_status: DataStatusResponse;
-  selected_line_no: string;
-  lines: LineOption[];
+  label: string;
   stations: StationOption[];
 }
 
+interface TransitLinesResponse {
+  generated_at: string | null;
+  lines: LineOption[];
+}
+
 export function HomeClient() {
-  const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
   const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
-  const [lineNo, setLineNo] = useState("3");
+  const [lineNo, setLineNo] = useState("");
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -81,44 +66,41 @@ export function HomeClient() {
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [layout, setLayout] = useState<TrainLayoutResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [stationLoading, setStationLoading] = useState(true);
+  const [stationLoading, setStationLoading] = useState(false);
   const [error, setError] = useState("");
   const [lineLoading, setLineLoading] = useState(true);
 
   useEffect(() => {
     let ignore = false;
 
-    async function loadBootstrap() {
+    async function loadTransitLines() {
       try {
-        const response = await fetch(`/api/v1/bootstrap?line_no=${encodeURIComponent(lineNo)}`);
-        const payload = (await response.json()) as BootstrapResponse;
+        const response = await fetch("/transit-lines.json", { cache: "force-cache" });
+        const payload = (await response.json()) as TransitLinesResponse;
         if (!response.ok) {
-          throw new Error("초기 데이터를 불러오지 못했습니다.");
+          throw new Error("노선 데이터를 불러오지 못했습니다.");
         }
         if (ignore) {
           return;
         }
 
         const nextLines = sortLines(payload.lines ?? []);
-        const nextLineNo = payload.selected_line_no || nextLines[0]?.line_no || lineNo;
-
-        setDataStatus(payload.data_status);
         setLineOptions(nextLines);
-        setLineNo(nextLineNo);
-        applyStations(payload.stations ?? []);
+        if (nextLines.length === 0) {
+          setError("배포된 노선 데이터가 비어 있습니다. 데이터 수집과 정적 노선 파일 생성을 확인해주세요.");
+        }
       } catch (nextError) {
         if (!ignore) {
-          setError(nextError instanceof Error ? nextError.message : "초기 데이터를 불러오지 못했습니다.");
+          setError(nextError instanceof Error ? nextError.message : "노선 데이터를 불러오지 못했습니다.");
         }
       } finally {
         if (!ignore) {
           setLineLoading(false);
-          setStationLoading(false);
         }
       }
     }
 
-    loadBootstrap();
+    loadTransitLines();
 
     return () => {
       ignore = true;
@@ -144,8 +126,8 @@ export function HomeClient() {
     [destinationOrder, origin, originOrder]
   );
   const canSubmit = Boolean(
-    dataStatus?.ready &&
-      !lineLoading &&
+    !lineLoading &&
+      lineNo &&
       origin &&
       destination &&
       datetime &&
@@ -156,38 +138,25 @@ export function HomeClient() {
 
   function applyStations(nextStations: StationOption[]) {
     setStations(nextStations);
-    setOrigin(preferredStation(nextStations, "경복궁", 0));
-    setDestination(preferredStation(nextStations, "신사", Math.max(0, nextStations.length - 1)));
+    setOrigin("");
+    setDestination("");
     setRecommendation(null);
     setLayout(null);
   }
 
-  async function handleLineChange(nextLineNo: string) {
+  function handleLineChange(nextLineNo: string) {
     setLineNo(nextLineNo);
+    setError("");
 
-    if (!dataStatus?.ready || !nextLineNo) {
+    if (!nextLineNo) {
       applyStations([]);
       return;
     }
 
     setStationLoading(true);
-    setError("");
-    setRecommendation(null);
-    setLayout(null);
-
-    try {
-      const response = await fetch(`/api/v1/stations?line_no=${encodeURIComponent(nextLineNo)}`);
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error?.message ?? "역 목록을 불러오지 못했습니다.");
-      }
-
-      applyStations((payload.stations ?? []) as StationOption[]);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "역 목록을 불러오지 못했습니다.");
-    } finally {
-      setStationLoading(false);
-    }
+    const selectedLine = lineOptions.find((line) => line.line_no === nextLineNo);
+    applyStations(selectedLine?.stations ?? []);
+    setStationLoading(false);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -249,12 +218,13 @@ export function HomeClient() {
           </span>
           <select
             value={lineNo}
-            onChange={(event) => void handleLineChange(event.target.value)}
-            disabled={!dataStatus?.ready || lineLoading}
+            onChange={(event) => handleLineChange(event.target.value)}
+            disabled={lineLoading}
           >
+            <option value="">호선 선택</option>
             {lineOptions.map((line) => (
               <option key={line.line_no} value={line.line_no}>
-                {line.line_no}호선
+                {line.label}
               </option>
             ))}
           </select>
@@ -268,7 +238,7 @@ export function HomeClient() {
           <select
             value={origin}
             onChange={(event) => setOrigin(event.target.value)}
-            disabled={stationLoading || stations.length === 0}
+            disabled={!lineNo || stationLoading || stations.length === 0}
           >
             <option value="">탑승역 선택</option>
             {stations.map((station) => (
@@ -287,7 +257,7 @@ export function HomeClient() {
           <select
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
-            disabled={stationLoading || stations.length === 0}
+            disabled={!lineNo || stationLoading || stations.length === 0}
           >
             <option value="">내릴역 선택</option>
             {stations.map((station) => (
@@ -326,36 +296,15 @@ export function HomeClient() {
         </section>
       ) : null}
 
-      {dataStatus && !dataStatus.ready ? <SetupState dataStatus={dataStatus} /> : null}
-
       {recommendation && layout ? (
         <ResultView recommendation={recommendation} layout={layout} />
-      ) : dataStatus?.ready ? (
+      ) : lineOptions.length > 0 ? (
         <section className="empty-state">
-          <Database size={20} aria-hidden="true" />
-          <p>공공데이터 수집 배치가 DB에 적재한 값을 기준으로 추천합니다.</p>
+          <TrainFront size={20} aria-hidden="true" />
+          <p>호선을 먼저 선택한 뒤 탑승역과 내릴역을 고르세요.</p>
         </section>
       ) : null}
     </main>
-  );
-}
-
-function SetupState({ dataStatus }: { dataStatus: DataStatusResponse }) {
-  return (
-    <section className="setup-state" aria-label="서비스 데이터 준비 상태">
-      <div className="setup-icon">
-        <Settings size={22} aria-hidden="true" />
-      </div>
-      <div>
-        <h2>서비스 데이터 준비가 필요합니다</h2>
-        <p>{toSetupMessage(dataStatus)}</p>
-        {dataStatus.last_ingestion ? (
-          <p className="setup-meta">
-            최근 수집: {dataStatus.last_ingestion.source_name} · {dataStatus.last_ingestion.status}
-          </p>
-        ) : null}
-      </div>
-    </section>
   );
 }
 
@@ -483,35 +432,12 @@ function sortLines(lines: LineOption[]) {
 
 function defaultDatetime() {
   const now = new Date();
-  now.setHours(8, 30, 0, 0);
+  now.setMinutes(Math.ceil((now.getMinutes() + 5) / 10) * 10, 0, 0);
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
     now.getDate()
-  ).padStart(2, "0")}T08:30`;
-}
-
-function preferredStation(stations: StationOption[], stationName: string, fallbackIndex: number) {
-  return (
-    stations.find((station) => station.station_name === stationName)?.station_name ??
-    stations[fallbackIndex]?.station_name ??
-    ""
-  );
+  ).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
 function toApiDatetime(value: string) {
   return value.length === 16 ? `${value}:00+09:00` : `${value}+09:00`;
-}
-
-function toSetupMessage(dataStatus: DataStatusResponse) {
-  switch (dataStatus.status) {
-    case "MISSING_DATABASE_URL":
-      return "운영 DB 연결 정보가 아직 설정되지 않았습니다.";
-    case "SCHEMA_MISSING":
-      return "DB는 연결됐지만 스키마가 생성되지 않았습니다.";
-    case "DATA_MISSING":
-      return "DB는 연결됐지만 추천에 필요한 공공데이터 적재가 끝나지 않았습니다.";
-    case "DATABASE_ERROR":
-      return "DB 상태 확인 중 오류가 발생했습니다.";
-    default:
-      return dataStatus.message;
-  }
 }

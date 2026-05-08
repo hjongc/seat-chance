@@ -3,6 +3,7 @@ import type {
   DayType,
   DirectionCode,
   DoorHint,
+  RecommendationResponse,
   SeatChanceDataset,
   TrainLayout
 } from "./types";
@@ -26,12 +27,28 @@ export interface DataStatus {
     finishedAt: string | null;
     message: string | null;
   } | null;
+  lastSuccessfulIngestion: {
+    sourceName: string;
+    rowCount: number;
+    finishedAt: string | null;
+  } | null;
 }
 
 export interface SeatChanceRepository {
   getTrainLayout(lineNo: string, direction: DirectionCode): Promise<TrainLayout | null>;
   getStations(lineNo: string): Promise<SeatChanceDataset["stations"]>;
   getLines(): Promise<Array<{ lineNo: string; stationCount: number }>>;
+  getCachedRecommendation(cacheKey: string, ttlSeconds: number): Promise<unknown | null>;
+  setCachedRecommendation(input: {
+    cacheKey: string;
+    origin: string;
+    destination: string;
+    lineNo: string;
+    direction: DirectionCode;
+    dayType: DayType;
+    timeSlot: string;
+    payload: RecommendationResponse & { train_layout: unknown };
+  }): Promise<void>;
   getDataset(input: {
     lineNo: string;
     direction: DirectionCode;
@@ -115,6 +132,44 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async getCachedRecommendation(cacheKey: string, ttlSeconds: number) {
+    const result = await this.pool.query<{ payload: unknown }>(
+      `
+        select payload
+        from recommendation_cache
+        where cache_key = $1
+          and generated_at >= now() - ($2::text || ' seconds')::interval
+        limit 1
+      `,
+      [cacheKey, ttlSeconds]
+    );
+
+    return result.rows[0]?.payload ?? null;
+  }
+
+  async setCachedRecommendation({
+    cacheKey,
+    origin,
+    destination,
+    lineNo,
+    direction,
+    dayType,
+    timeSlot,
+    payload
+  }: Parameters<SeatChanceRepository["setCachedRecommendation"]>[0]) {
+    await this.pool.query(
+      `
+        insert into recommendation_cache (
+          cache_key, origin, destination, line_no, direction_code, day_type, time_slot, payload, generated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+        on conflict (cache_key) do update set
+          payload = excluded.payload,
+          generated_at = excluded.generated_at
+      `,
+      [cacheKey, origin, destination, lineNo, direction, dayType, timeSlot, JSON.stringify(payload)]
+    );
   }
 
   async getDataset({ lineNo, direction, dayType, timeSlot }: Parameters<SeatChanceRepository["getDataset"]>[0]) {
@@ -235,6 +290,16 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
 let repository: SeatChanceRepository | null = null;
 let statusPool: Pool | null = null;
 
+function createPool(databaseUrl: string) {
+  return new Pool({
+    connectionString: databaseUrl,
+    max: Number(process.env.PG_POOL_MAX ?? 3),
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 5000),
+    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10000),
+    ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
+  });
+}
+
 export function getSeatChanceRepository(): SeatChanceRepository {
   if (repository) {
     return repository;
@@ -245,12 +310,7 @@ export function getSeatChanceRepository(): SeatChanceRepository {
     throw new Error("DATABASE_URL is required. Run the public-data ingestion job before serving APIs.");
   }
 
-  repository = new PostgresSeatChanceRepository(
-    new Pool({
-      connectionString: databaseUrl,
-      ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
-    })
-  );
+  repository = new PostgresSeatChanceRepository(createPool(databaseUrl));
 
   return repository;
 }
@@ -263,14 +323,12 @@ export async function getDataStatus(): Promise<DataStatus> {
       status: "MISSING_DATABASE_URL",
       message: "DATABASE_URL이 없어 DB에서 데이터를 읽을 수 없습니다.",
       counts: {},
-      lastIngestion: null
+      lastIngestion: null,
+      lastSuccessfulIngestion: null
     };
   }
 
-  statusPool ??= new Pool({
-    connectionString: databaseUrl,
-    ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
-  });
+  statusPool ??= createPool(databaseUrl);
 
   try {
     const tableCheck = await statusPool.query<{ table_name: string }>(
@@ -291,12 +349,14 @@ export async function getDataStatus(): Promise<DataStatus> {
         status: "SCHEMA_MISSING",
         message: `DB는 연결됐지만 스키마가 없습니다: ${missingTables.join(", ")}`,
         counts: {},
-        lastIngestion: null
+        lastIngestion: null,
+        lastSuccessfulIngestion: null
       };
     }
 
     const counts = await readTablePresence(statusPool);
     const lastIngestion = await readLastIngestion(statusPool);
+    const lastSuccessfulIngestion = await readLastSuccessfulIngestion(statusPool);
     const emptyTables = requiredTables.filter((tableName) => counts[tableName] === 0);
 
     if (emptyTables.length > 0) {
@@ -305,7 +365,8 @@ export async function getDataStatus(): Promise<DataStatus> {
         status: "DATA_MISSING",
         message: `DB는 연결됐지만 추천에 필요한 데이터가 비어 있습니다: ${emptyTables.join(", ")}`,
         counts,
-        lastIngestion
+        lastIngestion,
+        lastSuccessfulIngestion
       };
     }
 
@@ -314,7 +375,8 @@ export async function getDataStatus(): Promise<DataStatus> {
       status: "READY",
       message: "DB 연결과 필수 데이터 적재가 완료됐습니다.",
       counts,
-      lastIngestion
+      lastIngestion,
+      lastSuccessfulIngestion
     };
   } catch (error) {
     return {
@@ -327,7 +389,8 @@ export async function getDataStatus(): Promise<DataStatus> {
             ? error.message
             : "DB 상태를 확인하지 못했습니다.",
       counts: {},
-      lastIngestion: null
+      lastIngestion: null,
+      lastSuccessfulIngestion: null
     };
   }
 }
@@ -376,6 +439,41 @@ async function readLastIngestion(pool: Pool): Promise<DataStatus["lastIngestion"
         message
       from ingestion_run
       order by started_at desc
+      limit 1
+    `
+  );
+
+  return result.rows[0] ?? null;
+}
+
+async function readLastSuccessfulIngestion(pool: Pool): Promise<DataStatus["lastSuccessfulIngestion"]> {
+  const hasIngestionRun = await pool.query<{ table_name: string }>(
+    `
+      select table_name
+      from information_schema.tables
+      where table_schema = 'public'
+        and table_name = 'ingestion_run'
+      limit 1
+    `
+  );
+
+  if (hasIngestionRun.rows.length === 0) {
+    return null;
+  }
+
+  const result = await pool.query<{
+    sourceName: string;
+    rowCount: number;
+    finishedAt: string | null;
+  }>(
+    `
+      select
+        source_name as "sourceName",
+        row_count as "rowCount",
+        finished_at::text as "finishedAt"
+      from ingestion_run
+      where status = 'SUCCESS'
+      order by finished_at desc nulls last, started_at desc
       limit 1
     `
   );

@@ -1,6 +1,6 @@
 # 앉을각
 
-서울 지하철 3호선 일부 구간에서 좌석 회전 가능성이 높은 호차-문 위치를 추천하는 모바일 퍼스트 웹 MVP입니다.
+서울 지하철 노선별 좌석 회전 가능성이 높은 호차-문 위치를 추천하는 모바일 퍼스트 웹 MVP입니다.
 
 ## Data Flow
 
@@ -9,8 +9,9 @@
 1. GitHub Actions 또는 로컬에서 `npm run db:ingest` 실행
 2. `scripts/ingest-public-data.mjs`가 공공 API/CSV 소스에서 데이터를 수집
 3. 수집값을 Postgres 테이블에 upsert
-4. Next.js Route Handler가 Postgres에서 조회해 추천 점수를 계산
-5. 모바일 UI는 `/api/v1/stations`, `/api/v1/train-layout`, `/api/v1/recommendations`만 호출
+4. `scripts/export-transit-lines.mjs`가 `station_line_order`에서 전체 노선/역 목록을 `public/transit-lines.json`으로 생성
+5. 모바일 UI는 시작 시 정적 `/transit-lines.json`을 읽고, 추천 계산 시에만 API를 호출
+6. Next.js Route Handler가 Postgres에서 조회해 추천 점수를 계산
 
 `DATABASE_URL`이 없으면 앱 API는 추천을 만들지 않습니다. 개발 편의용 더미 추천 응답은 두지 않습니다.
 
@@ -33,6 +34,11 @@ Vercel project environment variables:
 ```text
 DATABASE_URL
 NEXT_PUBLIC_SITE_URL
+PG_POOL_MAX
+PG_CONNECTION_TIMEOUT_MS
+PG_IDLE_TIMEOUT_MS
+RECOMMENDATION_CACHE_TTL_SECONDS
+HEALTH_MAX_INGESTION_AGE_HOURS
 ```
 
 GitHub Actions secrets:
@@ -61,13 +67,16 @@ Never commit real API keys or database URLs. If a key is exposed in chat, issue 
 ```bash
 npm install
 npm run db:ingest
+npm run export:transit-lines
 npm run dev
 ```
 
 ## API
 
 ```http
+GET /transit-lines.json
 GET /api/v1/stations?line_no=3
 GET /api/v1/train-layout?line_no=3&direction=오금
 GET /api/v1/recommendations?origin=경복궁&destination=신사&line_no=3&direction=오금&datetime=2026-05-07T08:30:00+09:00&mode=seat
+GET /api/v1/health
 ```

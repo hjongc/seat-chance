@@ -105,3 +105,6 @@ create index if not exists transfer_door_lookup_idx
 
 create index if not exists facility_door_lookup_idx
   on exit_or_facility_door (line_no, station_name, direction_code);
+
+create index if not exists recommendation_cache_generated_at_idx
+  on recommendation_cache (generated_at desc);
