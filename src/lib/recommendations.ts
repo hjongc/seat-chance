@@ -47,25 +47,32 @@ export function recommendSeatPositions(
   const intermediateStations = routeStations.slice(1, -1);
 
   if (intermediateStations.length === 0) {
-    throw new RecommendationInputError("출발역과 도착역 사이에 추천할 중간역이 없습니다.");
+    throw new RecommendationInputError("승차역과 하차역 사이에 추천할 중간역이 없습니다.");
   }
 
-  const profiles = dataset.ridershipProfiles.filter(
-    (profile) =>
-      profile.lineNo === request.lineNo &&
-      profile.dayType === dayType &&
-      profile.timeSlot === timeSlot
+  const profiles = nearestTimeSlotItems(
+    dataset.ridershipProfiles.filter(
+      (profile) => profile.lineNo === request.lineNo && profile.dayType === dayType
+    ),
+    timeSlot
   );
+  const usedTimeSlot = profiles[0]?.timeSlot ?? timeSlot;
+
+  if (profiles.length === 0) {
+    throw new RecommendationInputError("선택한 시간대 주변의 승하차 데이터가 없어 추천할 수 없습니다.");
+  }
 
   const maxAlightings = Math.max(1, ...profiles.map((profile) => profile.alightings));
   const maxBoardings = Math.max(1, ...profiles.map((profile) => profile.boardings));
-  const congestion = dataset.congestionProfiles.find(
-    (profile) =>
-      profile.lineNo === request.lineNo &&
-      profile.direction === request.direction &&
-      profile.dayType === dayType &&
-      profile.timeSlot === timeSlot
-  );
+  const congestion = nearestTimeSlotItems(
+    dataset.congestionProfiles.filter(
+      (profile) =>
+        profile.lineNo === request.lineNo &&
+        profile.direction === request.direction &&
+        profile.dayType === dayType
+    ),
+    usedTimeSlot
+  )[0];
   const congestionPenalty = getCongestionPenalty(congestion);
   const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
   const doorHintsByStationAndCar = indexDoorHints(
@@ -98,13 +105,41 @@ export function recommendSeatPositions(
     destination: request.destination,
     line_no: request.lineNo,
     direction: request.direction,
-    time_slot: timeSlot,
+    time_slot: usedTimeSlot,
     recommendations,
     cautions: [
-      "점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+      "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
       "실제 열차 혼잡, 지연, 행사, 날씨 등은 반영되지 않을 수 있습니다."
     ]
   };
+}
+
+function nearestTimeSlotItems<T extends { timeSlot: string }>(items: T[], requestedTimeSlot: string): T[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const nearest = items.reduce<{ timeSlot: string; distance: number } | null>((best, item) => {
+    const distance = timeSlotDistanceMinutes(item.timeSlot, requestedTimeSlot);
+    if (!best || distance < best.distance) {
+      return { timeSlot: item.timeSlot, distance };
+    }
+    return best;
+  }, null);
+
+  return nearest ? items.filter((item) => item.timeSlot === nearest.timeSlot) : [];
+}
+
+function timeSlotDistanceMinutes(left: string, right: string) {
+  const leftMinutes = timeSlotToMinutes(left);
+  const rightMinutes = timeSlotToMinutes(right);
+  const distance = Math.abs(leftMinutes - rightMinutes);
+  return Math.min(distance, 1440 - distance);
+}
+
+function timeSlotToMinutes(value: string) {
+  const [hour = "0", minute = "0"] = value.split(":");
+  return Number(hour) * 60 + Number(minute);
 }
 
 function findTrainLayout(
@@ -135,7 +170,7 @@ function findRouteStations(
   const destinationStation = lineStations.find((station) => station.stationName === destination);
 
   if (!originStation || !destinationStation) {
-    throw new RecommendationInputError("선택한 노선의 역 목록 내에 탑승역/내릴역이 없습니다.");
+    throw new RecommendationInputError("선택한 노선의 역 목록 내에 승차역/하차역이 없습니다.");
   }
 
   const isOgeumBound = direction === "오금";
@@ -144,7 +179,7 @@ function findRouteStations(
     : originStation.sequenceNo > destinationStation.sequenceNo;
 
   if (!isValidDirection) {
-    throw new RecommendationInputError("선택한 방향과 출발/도착역 순서가 맞지 않습니다.");
+    throw new RecommendationInputError("선택한 방향과 승차역/하차역 순서가 맞지 않습니다.");
   }
 
   const [start, end] = [originStation.sequenceNo, destinationStation.sequenceNo].sort(
@@ -272,6 +307,18 @@ function toRecommendation(
   maxRaw: number,
   congestionPenalty: number
 ): Recommendation {
+  if (maxRaw <= 0) {
+    return {
+      rank: 0,
+      car_no: candidate.carNo,
+      door_no: candidate.doorNo,
+      score: 0,
+      grade: "LOW",
+      expected_seat_window: "데이터 부족",
+      reasons: ["선택한 시간대 주변 데이터가 부족해 좌석각을 계산하지 못했습니다."]
+    };
+  }
+
   const range = Math.max(1, maxRaw - minRaw);
   const relativeScore = 50 + ((candidate.rawScore - minRaw) / range) * 45;
   const score = clamp(roundToTenth(relativeScore - congestionPenalty), 0, 100);
@@ -340,7 +387,7 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   if (primary && primary.stationDemand > 0.2) {
-    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석 회전에 유리합니다.`);
+    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석각에 유리합니다.`);
   }
 
   if (secondary?.hint?.kind === "transfer") {
@@ -350,7 +397,7 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   if (primary && primary.remainingStops >= 3) {
-    reasons.push("목적지보다 충분히 앞선 구간에서 좌석 회전 가능성이 있습니다.");
+    reasons.push("목적지보다 충분히 앞선 구간에서 좌석각이 생길 가능성이 있습니다.");
   } else {
     reasons.push("도착 임박 구간의 기회는 낮게 반영했습니다.");
   }

@@ -1,4 +1,4 @@
-import { access, mkdir, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -7,6 +7,9 @@ const { Pool } = pg;
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const outputPath = join(rootDir, "public", "transit-lines.json");
 const optional = process.argv.includes("--optional");
+
+await loadLocalEnv();
+
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!databaseUrl) {
@@ -70,4 +73,30 @@ async function writeTransitLines(payload) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(`${outputPath}.tmp`, `${JSON.stringify(payload, null, 2)}\n`);
   await rename(`${outputPath}.tmp`, outputPath);
+}
+
+async function loadLocalEnv() {
+  for (const filename of [".env.local", ".env"]) {
+    try {
+      const content = await readFile(join(rootDir, filename), "utf8");
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+          continue;
+        }
+        const separatorIndex = trimmed.indexOf("=");
+        if (separatorIndex <= 0) {
+          continue;
+        }
+        const key = trimmed.slice(0, separatorIndex).trim();
+        const value = trimmed.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, "");
+        process.env[key] ??= value;
+      }
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+  }
 }

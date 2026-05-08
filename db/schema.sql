@@ -27,7 +27,7 @@ create table if not exists ridership_profile (
   line_no text not null,
   station_name text not null,
   day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
-  time_slot text not null check (time_slot ~ '^[0-2][0-9]:00$'),
+  time_slot text not null check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$'),
   boardings integer not null check (boardings >= 0),
   alightings integer not null check (alightings >= 0),
   source text not null,
@@ -40,7 +40,7 @@ create table if not exists congestion_profile (
   line_no text not null,
   direction_code text not null check (direction_code in ('오금', '대화')),
   day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
-  time_slot text not null check (time_slot ~ '^[0-2][0-9]:00$'),
+  time_slot text not null check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$'),
   congestion_pct numeric(5, 2) not null check (congestion_pct >= 0),
   source text not null,
   observed_on date,
@@ -108,3 +108,17 @@ create index if not exists facility_door_lookup_idx
 
 create index if not exists recommendation_cache_generated_at_idx
   on recommendation_cache (generated_at desc);
+
+alter table ridership_profile
+  drop constraint if exists ridership_profile_time_slot_check;
+
+alter table ridership_profile
+  add constraint ridership_profile_time_slot_check
+  check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$');
+
+alter table congestion_profile
+  drop constraint if exists congestion_profile_time_slot_check;
+
+alter table congestion_profile
+  add constraint congestion_profile_time_slot_check
+  check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$');

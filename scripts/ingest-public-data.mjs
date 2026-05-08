@@ -6,6 +6,8 @@ import pg from "pg";
 
 const { Pool } = pg;
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+await loadLocalEnv();
+
 const operator = "서울교통공사";
 const targetLineNo = process.env.TARGET_LINE_NO ?? "3";
 const targetMonth = process.env.TARGET_MONTH || previousKstMonth();
@@ -137,27 +139,28 @@ async function ingestRidershipProfiles() {
 
 function ridershipHourFields() {
   return Array.from({ length: 24 }, (_, hour) => {
-    const timeSlot = `${String(hour).padStart(2, "0")}:00`;
     const legacy = legacyHourName(hour);
     const sourceHour = hour === 0 ? 24 : hour;
-    return [
-      timeSlot,
-      [
-        `HR_${sourceHour}_GET_ON_NOPE`,
-        `HR_${String(sourceHour).padStart(2, "0")}_GET_ON_NOPE`,
-        `HR_${hour}_GET_ON_NOPE`,
-        `HR_${String(hour).padStart(2, "0")}_GET_ON_NOPE`,
-        `${legacy}_RIDE_NUM`
-      ],
-      [
-        `HR_${sourceHour}_GET_OFF_NOPE`,
-        `HR_${String(sourceHour).padStart(2, "0")}_GET_OFF_NOPE`,
-        `HR_${hour}_GET_OFF_NOPE`,
-        `HR_${String(hour).padStart(2, "0")}_GET_OFF_NOPE`,
-        `${legacy}_ALIGHT_NUM`
-      ]
+    const rideKeys = [
+      `HR_${sourceHour}_GET_ON_NOPE`,
+      `HR_${String(sourceHour).padStart(2, "0")}_GET_ON_NOPE`,
+      `HR_${hour}_GET_ON_NOPE`,
+      `HR_${String(hour).padStart(2, "0")}_GET_ON_NOPE`,
+      `${legacy}_RIDE_NUM`
     ];
-  });
+    const alightKeys = [
+      `HR_${sourceHour}_GET_OFF_NOPE`,
+      `HR_${String(sourceHour).padStart(2, "0")}_GET_OFF_NOPE`,
+      `HR_${hour}_GET_OFF_NOPE`,
+      `HR_${String(hour).padStart(2, "0")}_GET_OFF_NOPE`,
+      `${legacy}_ALIGHT_NUM`
+    ];
+
+    return [
+      [`${String(hour).padStart(2, "0")}:00`, rideKeys, alightKeys],
+      [`${String(hour).padStart(2, "0")}:30`, rideKeys, alightKeys]
+    ];
+  }).flat();
 }
 
 function legacyHourName(hour) {
@@ -859,7 +862,11 @@ function normalizeCongestionTimeSlot(key) {
   if (hour < 0 || hour > 23) {
     return "";
   }
-  return `${String(hour).padStart(2, "0")}:00`;
+  const minute = Number(hourMinute[2] ?? 0);
+  const roundedMinute = minute < 15 ? 0 : minute < 45 ? 30 : 60;
+  const nextHour = (hour + (roundedMinute === 60 ? 1 : 0)) % 24;
+  const nextMinute = roundedMinute === 60 ? 0 : roundedMinute;
+  return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
 }
 
 async function exportTransitLines() {
@@ -1039,6 +1046,32 @@ function requiredEnv(name) {
     throw new Error(`${name} is required.`);
   }
   return value;
+}
+
+async function loadLocalEnv() {
+  for (const filename of [".env.local", ".env"]) {
+    try {
+      const content = await readFile(join(rootDir, filename), "utf8");
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) {
+          continue;
+        }
+        const separatorIndex = trimmed.indexOf("=");
+        if (separatorIndex <= 0) {
+          continue;
+        }
+        const key = trimmed.slice(0, separatorIndex).trim();
+        const value = trimmed.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, "");
+        process.env[key] ??= value;
+      }
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 function previousKstMonth() {

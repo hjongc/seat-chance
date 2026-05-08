@@ -162,7 +162,7 @@ export function HomeClient() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!direction) {
-      setError("탑승역과 내릴역을 같은 노선 내에서 순서가 다른 방향으로 선택해주세요.");
+      setError("승차역과 하차역을 같은 노선 내에서 순서가 다른 방향으로 선택해주세요.");
       return;
     }
     setLoading(true);
@@ -206,7 +206,7 @@ export function HomeClient() {
         </div>
         <div>
           <h1>앉을각</h1>
-          <p>호선별 좌석 회전 위치 추천</p>
+          <p>호선별 좌석각 위치 추천</p>
         </div>
       </section>
 
@@ -233,14 +233,14 @@ export function HomeClient() {
         <label className="field">
           <span>
             <MapPin size={16} aria-hidden="true" />
-            탑승역
+            승차역
           </span>
           <select
             value={origin}
             onChange={(event) => setOrigin(event.target.value)}
             disabled={!lineNo || stationLoading || stations.length === 0}
           >
-            <option value="">탑승역 선택</option>
+            <option value="">승차역 선택</option>
             {stations.map((station) => (
               <option key={station.station_code} value={station.station_name}>
                 {station.station_name}
@@ -252,14 +252,14 @@ export function HomeClient() {
         <label className="field">
           <span>
             <MapPin size={16} aria-hidden="true" />
-            내릴역
+            하차역
           </span>
           <select
             value={destination}
             onChange={(event) => setDestination(event.target.value)}
             disabled={!lineNo || stationLoading || stations.length === 0}
           >
-            <option value="">내릴역 선택</option>
+            <option value="">하차역 선택</option>
             {stations.map((station) => (
               <option key={station.station_code} value={station.station_name}>
                 {station.station_name}
@@ -276,6 +276,7 @@ export function HomeClient() {
             </span>
             <input
               type="datetime-local"
+              step="1800"
               value={datetime}
               onChange={(event) => setDatetime(event.target.value)}
             />
@@ -301,7 +302,7 @@ export function HomeClient() {
       ) : lineOptions.length > 0 ? (
         <section className="empty-state">
           <TrainFront size={20} aria-hidden="true" />
-          <p>호선을 먼저 선택한 뒤 탑승역과 내릴역을 고르세요.</p>
+          <p>호선을 먼저 선택한 뒤 승차역과 하차역을 고르세요.</p>
         </section>
       ) : null}
     </main>
@@ -340,7 +341,7 @@ function ResultView({
                 </strong>
                 <span className={`grade grade-${item.grade.toLowerCase()}`}>{item.grade}</span>
               </div>
-              <p className="score-text">좌석 회전 점수 {Math.round(item.score)}점</p>
+              <p className="score-text">좌석각 점수 {Math.round(item.score)}점</p>
               <p className="window-text">예상 기회 구간: {item.expected_seat_window}</p>
               <ul>
                 {item.reasons.map((reason) => (
@@ -432,7 +433,7 @@ function sortLines(lines: LineOption[]) {
 
 function defaultDatetime() {
   const now = new Date();
-  now.setMinutes(Math.ceil((now.getMinutes() + 5) / 10) * 10, 0, 0);
+  now.setMinutes(Math.ceil((now.getMinutes() + 5) / 30) * 30, 0, 0);
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
     now.getDate()
   ).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
