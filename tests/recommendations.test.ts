@@ -181,6 +181,32 @@ test("supports non-line-3 terminal directions with fallback layout", () => {
   assert.equal(result.recommendations[0].expected_seat_window, "데이터 부족");
 });
 
+test("returns data-shortage recommendations when ridership data is unavailable", () => {
+  const result = recommendSeatPositions(
+    {
+      origin: "경복궁",
+      destination: "신사",
+      lineNo: "3",
+      direction: "오금",
+      datetime: "2026-05-07T08:30:00+09:00",
+      mode: "seat"
+    },
+    {
+      ...dataset,
+      ridershipProfiles: []
+    }
+  );
+
+  assert.equal(result.time_slot, "08:30");
+  assert.equal(result.recommendations.length, 3);
+  assert.deepEqual(
+    result.recommendations.map((item) => item.score),
+    [0, 0, 0]
+  );
+  assert.equal(result.recommendations[0].expected_seat_window, "데이터 부족");
+  assert.match(result.recommendations[0].reasons[0], /승하차 시간대 데이터가 없어/);
+});
+
 test("rejects reverse route when direction does not match station order", () => {
   assert.throws(
     () =>

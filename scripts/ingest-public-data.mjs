@@ -162,7 +162,14 @@ async function ingestStationOrder() {
 }
 
 async function ingestRidershipProfiles() {
-  const { month, lineRows } = await fetchRidershipRows();
+  const rows = await fetchRidershipRows();
+  if (!rows) {
+    await client.query("delete from ridership_profile where line_no = $1", [targetLineNo]);
+    console.warn(`No ridership rows returned for line ${targetLineNo}; recommendations will use data-shortage fallback.`);
+    return 0;
+  }
+
+  const { month, lineRows } = rows;
   const hourFields = ridershipHourFields();
   const observedMonth = `${month.slice(0, 4)}-${month.slice(4, 6)}-01`;
   const source = `서울 열린데이터광장 CardSubwayTime ${month} monthly day-type aggregate`;
@@ -280,7 +287,7 @@ async function fetchRidershipRows() {
     }
   }
 
-  throw new Error(`No ridership rows returned for line ${targetLineNo}, month ${targetMonth} or recent fallback months.`);
+  return null;
 }
 
 async function ingestTransferDoors() {
