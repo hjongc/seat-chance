@@ -29,7 +29,7 @@ const pool = new Pool({
   max: 1,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 10000,
-  ssl: databaseUrl.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined
+  ssl: databaseUrl.includes("sslmode=") ? true : undefined
 });
 
 try {
@@ -48,7 +48,7 @@ try {
     if (!line) {
       line = {
         line_no: row.line_no,
-        label: `${row.line_no}호선`,
+        label: lineLabel(row.line_no),
         stations: []
       };
       lines.push(line);
@@ -73,6 +73,13 @@ async function writeTransitLines(payload) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(`${outputPath}.tmp`, `${JSON.stringify(payload, null, 2)}\n`);
   await rename(`${outputPath}.tmp`, outputPath);
+}
+
+function lineLabel(lineNo) {
+  if (/^\d+$/.test(lineNo)) {
+    return `${lineNo}호선`;
+  }
+  return lineNo.endsWith("철도") ? lineNo : `${lineNo}선`;
 }
 
 async function loadLocalEnv() {
