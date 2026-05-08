@@ -8,6 +8,7 @@ import {
   TrainFront
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { forwardDirectionName, reverseDirectionName } from "@/lib/directions";
 
 interface StationOption {
   station_code: string;
@@ -54,6 +55,11 @@ interface LineOption {
 interface TransitLinesResponse {
   generated_at: string | null;
   lines: LineOption[];
+}
+
+interface ComboOption {
+  value: string;
+  label: string;
 }
 
 export function HomeClient() {
@@ -120,10 +126,10 @@ export function HomeClient() {
     () =>
       originOrder > 0 && destinationOrder > 0 && origin !== destination
         ? originOrder < destinationOrder
-          ? "오금"
-          : "대화"
+          ? forwardDirectionName(lineNo, stations.at(-1)?.station_name ?? "")
+          : reverseDirectionName(lineNo, stations[0]?.station_name ?? "")
         : "",
-    [destinationOrder, origin, originOrder]
+    [destinationOrder, lineNo, origin, originOrder, stations]
   );
   const canSubmit = Boolean(
     !lineLoading &&
@@ -134,6 +140,14 @@ export function HomeClient() {
       direction &&
       !loading &&
       !stationLoading
+  );
+  const lineComboOptions = useMemo(
+    () => lineOptions.map((line) => ({ value: line.line_no, label: line.label })),
+    [lineOptions]
+  );
+  const stationComboOptions = useMemo(
+    () => stations.map((station) => ({ value: station.station_name, label: station.station_name })),
+    [stations]
   );
 
   function applyStations(nextStations: StationOption[]) {
@@ -216,18 +230,13 @@ export function HomeClient() {
             <TrainFront size={16} aria-hidden="true" />
             호선
           </span>
-          <select
+          <ComboBox
+            placeholder="호선 선택 또는 검색"
             value={lineNo}
-            onChange={(event) => handleLineChange(event.target.value)}
+            options={lineComboOptions}
+            onChange={handleLineChange}
             disabled={lineLoading}
-          >
-            <option value="">호선 선택</option>
-            {lineOptions.map((line) => (
-              <option key={line.line_no} value={line.line_no}>
-                {line.label}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label className="field">
@@ -235,18 +244,13 @@ export function HomeClient() {
             <MapPin size={16} aria-hidden="true" />
             승차역
           </span>
-          <select
+          <ComboBox
+            placeholder="승차역 선택 또는 검색"
             value={origin}
-            onChange={(event) => setOrigin(event.target.value)}
+            options={stationComboOptions}
+            onChange={setOrigin}
             disabled={!lineNo || stationLoading || stations.length === 0}
-          >
-            <option value="">승차역 선택</option>
-            {stations.map((station) => (
-              <option key={station.station_code} value={station.station_name}>
-                {station.station_name}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <label className="field">
@@ -254,18 +258,13 @@ export function HomeClient() {
             <MapPin size={16} aria-hidden="true" />
             하차역
           </span>
-          <select
+          <ComboBox
+            placeholder="하차역 선택 또는 검색"
             value={destination}
-            onChange={(event) => setDestination(event.target.value)}
+            options={stationComboOptions}
+            onChange={setDestination}
             disabled={!lineNo || stationLoading || stations.length === 0}
-          >
-            <option value="">하차역 선택</option>
-            {stations.map((station) => (
-              <option key={station.station_code} value={station.station_name}>
-                {station.station_name}
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         <div className="split-fields">
@@ -418,6 +417,81 @@ function TrainLayout({
   );
 }
 
+function ComboBox({
+  value,
+  options,
+  placeholder,
+  disabled,
+  onChange
+}: {
+  value: string;
+  options: ComboOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
+  const filteredOptions = useMemo(() => {
+    const matches = options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
+    return matches.slice(0, 24);
+  }, [options, query]);
+
+  useEffect(() => {
+    setQuery(selectedLabel);
+  }, [selectedLabel]);
+
+  function handleQueryChange(nextQuery: string) {
+    setQuery(nextQuery);
+    setOpen(true);
+    if (value && nextQuery !== selectedLabel) {
+      onChange("");
+    }
+  }
+
+  function selectOption(option: ComboOption) {
+    setQuery(option.label);
+    setOpen(false);
+    onChange(option.value);
+  }
+
+  return (
+    <div className="combo-box">
+      <input
+        autoComplete="off"
+        disabled={disabled}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => handleQueryChange(event.target.value)}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        role="combobox"
+        value={query}
+      />
+      {open && !disabled ? (
+        <div className="combo-menu" role="listbox">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((option) => (
+              <button
+                className={option.value === value ? "combo-option combo-option-selected" : "combo-option"}
+                key={option.value}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => selectOption(option)}
+                role="option"
+                type="button"
+              >
+                {option.label}
+              </button>
+            ))
+          ) : (
+            <div className="combo-empty">검색 결과 없음</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function sortLines(lines: LineOption[]) {
   const nextLines = [...lines];
   nextLines.sort((left, right) => {
@@ -431,12 +505,58 @@ function sortLines(lines: LineOption[]) {
   return nextLines;
 }
 
+function matchesSearch(label: string, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+  const normalizedLabel = normalizeSearchText(label);
+  return normalizedLabel.includes(normalizedQuery) || chosung(label).includes(normalizedQuery);
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/\s/g, "");
+}
+
+function chosung(value: string) {
+  const initials = [
+    "ㄱ",
+    "ㄲ",
+    "ㄴ",
+    "ㄷ",
+    "ㄸ",
+    "ㄹ",
+    "ㅁ",
+    "ㅂ",
+    "ㅃ",
+    "ㅅ",
+    "ㅆ",
+    "ㅇ",
+    "ㅈ",
+    "ㅉ",
+    "ㅊ",
+    "ㅋ",
+    "ㅌ",
+    "ㅍ",
+    "ㅎ"
+  ];
+  return Array.from(value)
+    .map((char) => {
+      const code = char.charCodeAt(0) - 0xac00;
+      if (code < 0 || code > 11171) {
+        return char.toLowerCase();
+      }
+      return initials[Math.floor(code / 588)] ?? "";
+    })
+    .join("");
+}
+
 function defaultDatetime() {
-  const now = new Date();
-  now.setMinutes(Math.ceil((now.getMinutes() + 5) / 30) * 30, 0, 0);
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
-  ).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  kstNow.setUTCMinutes(Math.ceil((kstNow.getUTCMinutes() + 5) / 30) * 30, 0, 0);
+  return `${kstNow.getUTCFullYear()}-${String(kstNow.getUTCMonth() + 1).padStart(2, "0")}-${String(
+    kstNow.getUTCDate()
+  ).padStart(2, "0")}T${String(kstNow.getUTCHours()).padStart(2, "0")}:${String(kstNow.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 function toApiDatetime(value: string) {
