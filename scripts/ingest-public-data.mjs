@@ -651,6 +651,7 @@ async function fetchResource(url) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       return await fetch(url, {
+        signal: AbortSignal.timeout(Number(process.env.INGEST_FETCH_TIMEOUT_MS ?? 15000)),
         headers: {
           accept: "application/json,text/csv,text/plain,*/*",
           "user-agent": "seat-chance-ingest/0.1"
