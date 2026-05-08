@@ -648,10 +648,10 @@ async function fetchJson(url) {
 
 async function fetchResource(url) {
   let lastError = null;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       return await fetch(url, {
-        signal: AbortSignal.timeout(Number(process.env.INGEST_FETCH_TIMEOUT_MS ?? 15000)),
+        signal: AbortSignal.timeout(Number(process.env.INGEST_FETCH_TIMEOUT_MS ?? 5000)),
         headers: {
           accept: "application/json,text/csv,text/plain,*/*",
           "user-agent": "seat-chance-ingest/0.1"
