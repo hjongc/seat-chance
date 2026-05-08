@@ -67,17 +67,21 @@ export function recommendSeatPositions(
       profile.timeSlot === timeSlot
   );
   const congestionPenalty = getCongestionPenalty(congestion);
+  const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
+  const doorHintsByStationAndCar = indexDoorHints(
+    dataset.doorHints.filter(
+      (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
+    )
+  );
   const candidates = buildDoorCandidates(layout).map((candidate) =>
     scoreCandidate({
       candidate,
       intermediateStations,
       totalStops: routeStations.length - 1,
-      profiles,
+      profileByStation,
       maxAlightings,
       maxBoardings,
-      doorHints: dataset.doorHints.filter(
-        (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
-      )
+      doorHintsByStationAndCar
     })
   );
 
@@ -131,7 +135,7 @@ function findRouteStations(
   const destinationStation = lineStations.find((station) => station.stationName === destination);
 
   if (!originStation || !destinationStation) {
-    throw new RecommendationInputError("출발역 또는 도착역이 3호선 MVP 범위에 없습니다.");
+    throw new RecommendationInputError("선택한 노선의 역 목록 내에 탑승역/내릴역이 없습니다.");
   }
 
   const isOgeumBound = direction === "오금";
@@ -167,44 +171,64 @@ function scoreCandidate({
   candidate,
   intermediateStations,
   totalStops,
-  profiles,
+  profileByStation,
   maxAlightings,
   maxBoardings,
-  doorHints
+  doorHintsByStationAndCar
 }: {
   candidate: Candidate;
   intermediateStations: Station[];
   totalStops: number;
-  profiles: SeatChanceDataset["ridershipProfiles"];
+  profileByStation: Map<string, SeatChanceDataset["ridershipProfiles"][number]>;
   maxAlightings: number;
   maxBoardings: number;
-  doorHints: DoorHint[];
+  doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
 
   for (const [index, station] of intermediateStations.entries()) {
-    const profile = profiles.find((candidateProfile) => candidateProfile.stationName === station.stationName);
+    const profile = profileByStation.get(station.stationName);
     if (!profile) {
       continue;
     }
 
     const progress = (index + 1) / totalStops;
-    const arrivalPenalty = progress > 0.72 ? (progress - 0.72) * 1.8 : 0;
-    const distanceWeight = clamp(1 - arrivalPenalty, 0.28, 1);
+    const stationsAfter = totalStops - index - 1;
+    const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
+    const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
+    const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
     const alightingScore = profile.alightings / maxAlightings;
-    const boardingPenalty = (profile.boardings / maxBoardings) * 0.36;
-    const stationDemand = clamp(alightingScore - boardingPenalty, 0, 1);
-    const matchingHint = doorHints.find(
-      (hint) =>
-        hint.stationName === station.stationName &&
-        hint.carNo === candidate.carNo &&
-        hint.doorNo === candidate.doorNo
+    const boardingScore = profile.boardings / maxBoardings;
+    const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
+    const matchingHint = (doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? []).reduce<{
+      hint: DoorHint;
+      distance: number;
+    } | null>(
+      (best, hint) => {
+        const distance = Math.abs(hint.doorNo - candidate.doorNo);
+        if (distance > 1) {
+          return best;
+        }
+        if (!best || distance < best.distance || (distance === best.distance && hint.weight > best.hint.weight)) {
+          return { hint, distance };
+        }
+        return best;
+      },
+      null
     );
-    const baseline = stationDemand * 8 * distanceWeight;
-    const hintBonus = matchingHint
-      ? stationDemand * matchingHint.weight * (matchingHint.kind === "transfer" ? 34 : 22) * distanceWeight
+    const hintDistanceFactor = matchingHint
+      ? matchingHint.distance === 0
+        ? 1
+        : 0.9
       : 0;
-    const contributionScore = baseline + hintBonus;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight;
+    const hintBonus = matchingHint
+      ? stationDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor
+      : 0;
+    const hintBoost = matchingHint
+      ? (matchingHint.hint.kind === "transfer" ? 1.25 : 0.75)
+      : 0;
+    const contributionScore = baseline + hintBonus * hintBoost;
 
     scored.rawScore += contributionScore;
     if (contributionScore > 0) {
@@ -213,13 +237,33 @@ function scoreCandidate({
         sequenceNo: station.sequenceNo,
         remainingStops: intermediateStations.length - index,
         score: contributionScore,
-        hint: matchingHint ?? null,
+        hint: matchingHint ? matchingHint.hint : null,
         stationDemand
       });
     }
   }
 
   return scored;
+}
+
+function indexDoorHints(doorHints: DoorHint[]) {
+  const index = new Map<string, DoorHint[]>();
+
+  for (const hint of doorHints) {
+    const key = hintIndexKey(hint.stationName, hint.carNo);
+    const hints = index.get(key);
+    if (hints) {
+      hints.push(hint);
+    } else {
+      index.set(key, [hint]);
+    }
+  }
+
+  return index;
+}
+
+function hintIndexKey(stationName: string, carNo: number) {
+  return `${stationName}\u0000${carNo}`;
 }
 
 function toRecommendation(
@@ -262,10 +306,12 @@ function toGrade(score: number) {
 }
 
 function toExpectedSeatWindow(contributions: Contribution[]): string {
-  const keyStations = contributions
-    .filter((contribution) => contribution.hint)
-    .slice(0, 2)
-    .sort((left, right) => left.sequenceNo - right.sequenceNo);
+  const hintedContributions = contributions.filter((contribution) => contribution.hint);
+  const keyStations =
+    hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2).length >= 2
+      ? hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2)
+      : hintedContributions.slice(0, 2);
+  keyStations.sort((left, right) => left.sequenceNo - right.sequenceNo);
 
   if (keyStations.length >= 2) {
     return `${keyStations[0].stationName}~${keyStations[1].stationName}`;
@@ -293,6 +339,10 @@ function toReasons(contributions: Contribution[]): string[] {
     reasons.push(`${primary.stationName} 하차 수요가 높은 구간입니다.`);
   }
 
+  if (primary && primary.stationDemand > 0.2) {
+    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석 회전에 유리합니다.`);
+  }
+
   if (secondary?.hint?.kind === "transfer") {
     reasons.push(`${secondary.stationName} 환승 동선과도 가까운 위치입니다.`);
   } else if (secondary?.hint?.kind === "facility") {
@@ -315,4 +365,3 @@ function roundToTenth(value: number): number {
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
-

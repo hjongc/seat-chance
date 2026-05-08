@@ -2,7 +2,6 @@
 
 import {
   AlertCircle,
-  ArrowRightLeft,
   Clock3,
   Database,
   MapPin,
@@ -36,6 +35,7 @@ interface RecommendationResponse {
   time_slot: string;
   recommendations: Recommendation[];
   cautions: string[];
+  train_layout: TrainLayoutResponse | null;
 }
 
 interface TrainLayoutResponse {
@@ -58,100 +58,73 @@ interface DataStatusResponse {
   } | null;
 }
 
-const supportedLines = [{ lineNo: "3", label: "3호선" }];
+interface LineOption {
+  line_no: string;
+  station_count: number;
+}
+
+interface BootstrapResponse {
+  data_status: DataStatusResponse;
+  selected_line_no: string;
+  lines: LineOption[];
+  stations: StationOption[];
+}
 
 export function HomeClient() {
   const [dataStatus, setDataStatus] = useState<DataStatusResponse | null>(null);
+  const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
   const [lineNo, setLineNo] = useState("3");
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [direction, setDirection] = useState("오금");
   const [datetime, setDatetime] = useState(defaultDatetime());
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [layout, setLayout] = useState<TrainLayoutResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [stationLoading, setStationLoading] = useState(true);
   const [error, setError] = useState("");
+  const [lineLoading, setLineLoading] = useState(true);
 
   useEffect(() => {
     let ignore = false;
 
-    async function loadDataStatus() {
+    async function loadBootstrap() {
       try {
-        const statusResponse = await fetch("/api/v1/data-status");
-        const statusPayload = (await statusResponse.json()) as DataStatusResponse;
-        if (!statusResponse.ok) {
-          throw new Error("서비스 데이터 상태를 확인하지 못했습니다.");
+        const response = await fetch(`/api/v1/bootstrap?line_no=${encodeURIComponent(lineNo)}`);
+        const payload = (await response.json()) as BootstrapResponse;
+        if (!response.ok) {
+          throw new Error("초기 데이터를 불러오지 못했습니다.");
         }
         if (ignore) {
           return;
         }
 
-        setDataStatus(statusPayload);
+        const nextLines = sortLines(payload.lines ?? []);
+        const nextLineNo = payload.selected_line_no || nextLines[0]?.line_no || lineNo;
+
+        setDataStatus(payload.data_status);
+        setLineOptions(nextLines);
+        setLineNo(nextLineNo);
+        applyStations(payload.stations ?? []);
       } catch (nextError) {
         if (!ignore) {
-          setError(nextError instanceof Error ? nextError.message : "서비스 데이터 상태를 확인하지 못했습니다.");
+          setError(nextError instanceof Error ? nextError.message : "초기 데이터를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!ignore) {
+          setLineLoading(false);
+          setStationLoading(false);
         }
       }
     }
 
-    loadDataStatus();
+    loadBootstrap();
 
     return () => {
       ignore = true;
     };
   }, []);
 
-  useEffect(() => {
-    let ignore = false;
-
-    async function loadStations() {
-      if (!dataStatus?.ready) {
-        setStationLoading(false);
-        return;
-      }
-
-      setStationLoading(true);
-      setError("");
-      setRecommendation(null);
-      setLayout(null);
-
-      try {
-        const response = await fetch(`/api/v1/stations?line_no=${encodeURIComponent(lineNo)}`);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.error?.message ?? "역 목록을 불러오지 못했습니다.");
-        }
-        if (ignore) {
-          return;
-        }
-
-        const nextStations = payload.stations as StationOption[];
-        setStations(nextStations);
-        setOrigin(preferredStation(nextStations, "경복궁", 0));
-        setDestination(preferredStation(nextStations, "신사", Math.max(0, nextStations.length - 1)));
-      } catch (nextError) {
-        if (!ignore) {
-          setError(nextError instanceof Error ? nextError.message : "역 목록을 불러오지 못했습니다.");
-        }
-      } finally {
-        if (!ignore) {
-          setStationLoading(false);
-        }
-      }
-    }
-
-    loadStations();
-
-    return () => {
-      ignore = true;
-    };
-  }, [dataStatus?.ready, lineNo]);
-
-  const canSubmit = Boolean(
-    dataStatus?.ready && origin && destination && datetime && !loading && !stationLoading
-  );
   const originOrder = useMemo(
     () => stations.find((station) => station.station_name === origin)?.sequence_no ?? 0,
     [origin, stations]
@@ -161,15 +134,68 @@ export function HomeClient() {
     [destination, stations]
   );
 
-  useEffect(() => {
-    if (!originOrder || !destinationOrder) {
+  const direction = useMemo(
+    () =>
+      originOrder > 0 && destinationOrder > 0 && origin !== destination
+        ? originOrder < destinationOrder
+          ? "오금"
+          : "대화"
+        : "",
+    [destinationOrder, origin, originOrder]
+  );
+  const canSubmit = Boolean(
+    dataStatus?.ready &&
+      !lineLoading &&
+      origin &&
+      destination &&
+      datetime &&
+      direction &&
+      !loading &&
+      !stationLoading
+  );
+
+  function applyStations(nextStations: StationOption[]) {
+    setStations(nextStations);
+    setOrigin(preferredStation(nextStations, "경복궁", 0));
+    setDestination(preferredStation(nextStations, "신사", Math.max(0, nextStations.length - 1)));
+    setRecommendation(null);
+    setLayout(null);
+  }
+
+  async function handleLineChange(nextLineNo: string) {
+    setLineNo(nextLineNo);
+
+    if (!dataStatus?.ready || !nextLineNo) {
+      applyStations([]);
       return;
     }
-    setDirection(originOrder < destinationOrder ? "오금" : "대화");
-  }, [originOrder, destinationOrder]);
+
+    setStationLoading(true);
+    setError("");
+    setRecommendation(null);
+    setLayout(null);
+
+    try {
+      const response = await fetch(`/api/v1/stations?line_no=${encodeURIComponent(nextLineNo)}`);
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error?.message ?? "역 목록을 불러오지 못했습니다.");
+      }
+
+      applyStations((payload.stations ?? []) as StationOption[]);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "역 목록을 불러오지 못했습니다.");
+    } finally {
+      setStationLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!direction) {
+      setError("탑승역과 내릴역을 같은 노선 내에서 순서가 다른 방향으로 선택해주세요.");
+      return;
+    }
     setLoading(true);
     setError("");
     setRecommendation(null);
@@ -184,26 +210,18 @@ export function HomeClient() {
         datetime: toApiDatetime(datetime),
         mode: "seat"
       });
-      const [recommendationResponse, layoutResponse] = await Promise.all([
-        fetch(`/api/v1/recommendations?${query.toString()}`),
-        fetch(
-          `/api/v1/train-layout?line_no=${encodeURIComponent(lineNo)}&direction=${encodeURIComponent(
-            direction
-          )}`
-        )
-      ]);
+      const recommendationResponse = await fetch(`/api/v1/recommendations?${query.toString()}`);
       const recommendationPayload = await recommendationResponse.json();
-      const layoutPayload = await layoutResponse.json();
 
       if (!recommendationResponse.ok) {
         throw new Error(recommendationPayload.error?.message ?? "추천을 계산하지 못했습니다.");
       }
-      if (!layoutResponse.ok) {
-        throw new Error(layoutPayload.error?.message ?? "열차 레이아웃을 불러오지 못했습니다.");
+      if (!recommendationPayload.train_layout) {
+        throw new Error("열차 레이아웃을 불러오지 못했습니다.");
       }
 
       setRecommendation(recommendationPayload);
-      setLayout(layoutPayload);
+      setLayout(recommendationPayload.train_layout);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "추천을 계산하지 못했습니다.");
     } finally {
@@ -231,12 +249,12 @@ export function HomeClient() {
           </span>
           <select
             value={lineNo}
-            onChange={(event) => setLineNo(event.target.value)}
-            disabled={!dataStatus?.ready}
+            onChange={(event) => void handleLineChange(event.target.value)}
+            disabled={!dataStatus?.ready || lineLoading}
           >
-            {supportedLines.map((line) => (
-              <option key={line.lineNo} value={line.lineNo}>
-                {line.label}
+            {lineOptions.map((line) => (
+              <option key={line.line_no} value={line.line_no}>
+                {line.line_no}호선
               </option>
             ))}
           </select>
@@ -293,16 +311,6 @@ export function HomeClient() {
             />
           </label>
 
-          <label className="field">
-            <span>
-              <ArrowRightLeft size={16} aria-hidden="true" />
-              방향
-            </span>
-            <select value={direction} onChange={(event) => setDirection(event.target.value)}>
-              <option value="오금">오금</option>
-              <option value="대화">대화</option>
-            </select>
-          </label>
         </div>
 
         <button className="primary-action" type="submit" disabled={!canSubmit}>
@@ -434,18 +442,23 @@ function TrainLayout({
           return (
             <div className="car-column" key={carNo}>
               <div className="car-label">{carNo}호차</div>
-              {Array.from({ length: layout.doors_per_car }, (_, doorIndex) => {
-                const doorNo = doorIndex + 1;
-                const rank = rankedDoors.get(`${carNo}-${doorNo}`);
-                return (
-                  <div className={rank ? "door-cell door-highlight" : "door-cell"} key={doorNo}>
-                    <span>
-                      {carNo}-{doorNo}
-                    </span>
-                    {rank ? <strong>{rank}위</strong> : null}
-                  </div>
-                );
-              })}
+              <div
+                className="door-row"
+                style={{ gridTemplateColumns: `repeat(${layout.doors_per_car}, minmax(0, 1fr))` }}
+              >
+                {Array.from({ length: layout.doors_per_car }, (_, doorIndex) => {
+                  const doorNo = doorIndex + 1;
+                  const rank = rankedDoors.get(`${carNo}-${doorNo}`);
+                  return (
+                    <div className={rank ? "door-cell door-highlight" : "door-cell"} key={doorNo}>
+                      <span>
+                        {carNo}-{doorNo}
+                      </span>
+                      {rank ? <strong>{rank}위</strong> : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -453,6 +466,19 @@ function TrainLayout({
       <p className="source-text">레이아웃 출처: {layout.source}</p>
     </section>
   );
+}
+
+function sortLines(lines: LineOption[]) {
+  const nextLines = [...lines];
+  nextLines.sort((left, right) => {
+    const leftNo = Number(left.line_no);
+    const rightNo = Number(right.line_no);
+    if (Number.isFinite(leftNo) && Number.isFinite(rightNo) && leftNo !== rightNo) {
+      return leftNo - rightNo;
+    }
+    return left.line_no.localeCompare(right.line_no);
+  });
+  return nextLines;
 }
 
 function defaultDatetime() {
