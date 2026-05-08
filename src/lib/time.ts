@@ -16,10 +16,9 @@ export function toTimeSlot(datetime: string): string {
 
 function toHalfHourSlot(hour: number, minute: number) {
   const totalMinutes = hour * 60 + minute;
-  const roundedMinutes = Math.round(totalMinutes / 30) * 30;
-  const normalizedMinutes = ((roundedMinutes % 1440) + 1440) % 1440;
-  const nextHour = Math.floor(normalizedMinutes / 60);
-  const nextMinute = normalizedMinutes % 60;
+  const roundedMinutes = Math.min(Math.ceil(totalMinutes / 30) * 30, 23 * 60 + 30);
+  const nextHour = Math.floor(roundedMinutes / 60);
+  const nextMinute = roundedMinutes % 60;
   return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
 }
 

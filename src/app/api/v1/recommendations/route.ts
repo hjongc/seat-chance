@@ -110,7 +110,7 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v4", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
+  return ["seat-v5", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }
 
 function inferDirection(

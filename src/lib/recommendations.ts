@@ -133,8 +133,7 @@ function nearestTimeSlotItems<T extends { timeSlot: string }>(items: T[], reques
 function timeSlotDistanceMinutes(left: string, right: string) {
   const leftMinutes = timeSlotToMinutes(left);
   const rightMinutes = timeSlotToMinutes(right);
-  const distance = Math.abs(leftMinutes - rightMinutes);
-  return Math.min(distance, 1440 - distance);
+  return Math.abs(leftMinutes - rightMinutes);
 }
 
 function timeSlotToMinutes(value: string) {
