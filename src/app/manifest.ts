@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "앉을각",
     short_name: "앉을각",
-    description: "서울 지하철 좌석 회전 위치 추천",
+    description: "서울 지하철 좌석각 위치 추천",
     start_url: "/",
     display: "standalone",
     background_color: "#f7f8fa",
@@ -13,4 +13,3 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait"
   };
 }
-

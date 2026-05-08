@@ -364,7 +364,7 @@ select {
 .train-scroll {
   display: grid;
   gap: 8px;
-  grid-auto-columns: minmax(168px, 184px);
+  grid-auto-columns: 88px;
   grid-auto-flow: column;
   overflow-x: auto;
   padding-bottom: 8px;
@@ -391,7 +391,6 @@ select {
 .door-row {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
 
 .door-cell {

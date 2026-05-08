@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recommendSeatPositions } from "../src/lib/recommendations";
+import { toTimeSlot } from "../src/lib/time";
 import type { SeatChanceDataset } from "../src/lib/types";
 
 const dataset: SeatChanceDataset = {
@@ -115,8 +116,15 @@ test("returns ranked seat turnover recommendations without probability wording",
   );
   assert.ok(result.recommendations[0].score >= result.recommendations[1].score);
   assert.ok(result.recommendations.some((item) => item.car_no === 2 && item.door_no === 3));
-  assert.match(result.cautions[0], /실제 착석 확률이 아니라/);
+  assert.match(result.cautions[0], /좌석각 점수는 실제 착석 확률이 아니라/);
   assert.doesNotMatch(JSON.stringify(result), /확률 \d+%/);
+});
+
+test("rounds departure time up to the next half-hour slot", () => {
+  assert.equal(toTimeSlot("2026-05-07T10:00:00+09:00"), "10:00");
+  assert.equal(toTimeSlot("2026-05-07T10:10:00+09:00"), "10:30");
+  assert.equal(toTimeSlot("2026-05-07T10:30:00+09:00"), "10:30");
+  assert.equal(toTimeSlot("2026-05-07T23:50:00+09:00"), "23:30");
 });
 
 test("rejects reverse route when direction does not match station order", () => {
@@ -136,4 +144,3 @@ test("rejects reverse route when direction does not match station order", () => 
     /방향/
   );
 });
-

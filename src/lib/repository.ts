@@ -221,10 +221,9 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
             from ridership_profile
             where line_no = $1
               and day_type = $2
-              and time_slot = $3
             order by line_no, station_name, day_type, time_slot, observed_month desc
           `,
-          [lineNo, dayType, timeSlot]
+          [lineNo, dayType]
         ),
         this.pool.query<SeatChanceDataset["congestionProfiles"][number]>(
           `
@@ -239,9 +238,8 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
             where line_no = $1
               and direction_code = $2
               and day_type = $3
-              and time_slot = $4
           `,
-          [lineNo, direction, dayType, timeSlot]
+          [lineNo, direction, dayType]
         ),
         this.pool.query<DoorHint>(
           `

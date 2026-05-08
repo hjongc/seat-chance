@@ -110,7 +110,7 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v1", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
+  return ["seat-v5", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }
 
 function inferDirection(
@@ -125,7 +125,7 @@ function inferDirection(
     throw new RecommendationInputError("선택한 역이 해당 노선 데이터에 없습니다.");
   }
   if (originStation.sequenceNo === destinationStation.sequenceNo) {
-    throw new RecommendationInputError("탑승역과 내릴역은 서로 달라야 합니다.");
+    throw new RecommendationInputError("승차역과 하차역은 서로 달라야 합니다.");
   }
 
   return originStation.sequenceNo < destinationStation.sequenceNo ? "오금" : "대화";

@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "앉을각",
-  description: "서울 지하철 3호선 좌석 회전 위치 추천",
+  description: "서울 지하철 좌석각 위치 추천",
   applicationName: "앉을각",
   appleWebApp: {
     capable: true,
@@ -28,4 +28,3 @@ export default function RootLayout({
     </html>
   );
 }
-
