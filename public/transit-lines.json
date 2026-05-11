@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-08T01:47:00.559Z",
+  "generated_at": "2026-05-11T00:32:15.828Z",
   "lines": [
     {
       "line_no": "1",
@@ -2477,6 +2477,1210 @@
           "station_code": "4138",
           "station_name": "중앙보훈병원",
           "sequence_no": 38
+        }
+      ]
+    },
+    {
+      "line_no": "경의중앙",
+      "label": "경의중앙선",
+      "stations": [
+        {
+          "station_code": "100C",
+          "station_name": "용산",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "1008",
+          "station_name": "이촌",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "1009",
+          "station_name": "서빙고",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "1010",
+          "station_name": "한남",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "1011",
+          "station_name": "옥수",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "1012",
+          "station_name": "응봉",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "1013",
+          "station_name": "왕십리",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "1014",
+          "station_name": "청량리",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "101C",
+          "station_name": "회기",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "1201",
+          "station_name": "중랑",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "1202",
+          "station_name": "상봉",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "1203",
+          "station_name": "망우",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "1204",
+          "station_name": "양원",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "1205",
+          "station_name": "구리",
+          "sequence_no": 14
+        },
+        {
+          "station_code": "1206",
+          "station_name": "도농",
+          "sequence_no": 15
+        },
+        {
+          "station_code": "1207",
+          "station_name": "양정",
+          "sequence_no": 16
+        },
+        {
+          "station_code": "1208",
+          "station_name": "덕소",
+          "sequence_no": 17
+        },
+        {
+          "station_code": "1209",
+          "station_name": "도심",
+          "sequence_no": 18
+        },
+        {
+          "station_code": "1210",
+          "station_name": "팔당",
+          "sequence_no": 19
+        },
+        {
+          "station_code": "1211",
+          "station_name": "운길산",
+          "sequence_no": 20
+        },
+        {
+          "station_code": "1212",
+          "station_name": "양수",
+          "sequence_no": 21
+        },
+        {
+          "station_code": "1213",
+          "station_name": "신원",
+          "sequence_no": 22
+        },
+        {
+          "station_code": "1214",
+          "station_name": "국수",
+          "sequence_no": 23
+        },
+        {
+          "station_code": "1215",
+          "station_name": "아신",
+          "sequence_no": 24
+        },
+        {
+          "station_code": "1216",
+          "station_name": "오빈",
+          "sequence_no": 25
+        },
+        {
+          "station_code": "1217",
+          "station_name": "양평",
+          "sequence_no": 26
+        },
+        {
+          "station_code": "1218",
+          "station_name": "원덕",
+          "sequence_no": 27
+        },
+        {
+          "station_code": "1219",
+          "station_name": "용문",
+          "sequence_no": 28
+        },
+        {
+          "station_code": "1220",
+          "station_name": "지평",
+          "sequence_no": 29
+        },
+        {
+          "station_code": "1252",
+          "station_name": "신촌",
+          "sequence_no": 30
+        },
+        {
+          "station_code": "1262",
+          "station_name": "공덕",
+          "sequence_no": 31
+        },
+        {
+          "station_code": "1251",
+          "station_name": "서울",
+          "sequence_no": 32
+        },
+        {
+          "station_code": "1263",
+          "station_name": "서강대",
+          "sequence_no": 33
+        },
+        {
+          "station_code": "1264",
+          "station_name": "홍대입구",
+          "sequence_no": 34
+        },
+        {
+          "station_code": "1265",
+          "station_name": "가좌",
+          "sequence_no": 35
+        },
+        {
+          "station_code": "1266",
+          "station_name": "디지털미디어시티",
+          "sequence_no": 36
+        },
+        {
+          "station_code": "1267",
+          "station_name": "수색",
+          "sequence_no": 37
+        },
+        {
+          "station_code": "1268",
+          "station_name": "한국항공대",
+          "sequence_no": 38
+        },
+        {
+          "station_code": "1269",
+          "station_name": "강매",
+          "sequence_no": 39
+        },
+        {
+          "station_code": "1270",
+          "station_name": "행신",
+          "sequence_no": 40
+        },
+        {
+          "station_code": "1271",
+          "station_name": "능곡",
+          "sequence_no": 41
+        },
+        {
+          "station_code": "0300",
+          "station_name": "대곡",
+          "sequence_no": 42
+        },
+        {
+          "station_code": "1272",
+          "station_name": "곡산",
+          "sequence_no": 43
+        },
+        {
+          "station_code": "1273",
+          "station_name": "백마",
+          "sequence_no": 44
+        },
+        {
+          "station_code": "1274",
+          "station_name": "풍산",
+          "sequence_no": 45
+        },
+        {
+          "station_code": "1275",
+          "station_name": "일산",
+          "sequence_no": 46
+        },
+        {
+          "station_code": "1276",
+          "station_name": "탄현",
+          "sequence_no": 47
+        },
+        {
+          "station_code": "1277",
+          "station_name": "야당",
+          "sequence_no": 48
+        },
+        {
+          "station_code": "1278",
+          "station_name": "운정",
+          "sequence_no": 49
+        },
+        {
+          "station_code": "1279",
+          "station_name": "금릉",
+          "sequence_no": 50
+        },
+        {
+          "station_code": "1280",
+          "station_name": "금촌",
+          "sequence_no": 51
+        },
+        {
+          "station_code": "1282",
+          "station_name": "월롱",
+          "sequence_no": 52
+        },
+        {
+          "station_code": "1283",
+          "station_name": "파주",
+          "sequence_no": 53
+        },
+        {
+          "station_code": "1284",
+          "station_name": "문산",
+          "sequence_no": 54
+        },
+        {
+          "station_code": "1286",
+          "station_name": "운천",
+          "sequence_no": 55
+        },
+        {
+          "station_code": "1285",
+          "station_name": "임진강",
+          "sequence_no": 56
+        },
+        {
+          "station_code": "1261",
+          "station_name": "효창공원앞",
+          "sequence_no": 57
+        }
+      ]
+    },
+    {
+      "line_no": "경춘",
+      "label": "경춘선",
+      "stations": [
+        {
+          "station_code": "1305",
+          "station_name": "광운대",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "1306",
+          "station_name": "청량리",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "1307",
+          "station_name": "회기",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "1308",
+          "station_name": "중랑",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "1309",
+          "station_name": "상봉",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "1310",
+          "station_name": "망우",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "1311",
+          "station_name": "신내",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "1312",
+          "station_name": "갈매",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "1313",
+          "station_name": "별내",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "1314",
+          "station_name": "퇴계원",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "1315",
+          "station_name": "사릉",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "1316",
+          "station_name": "금곡",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "1317",
+          "station_name": "평내호평",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "1318",
+          "station_name": "천마산",
+          "sequence_no": 14
+        },
+        {
+          "station_code": "1319",
+          "station_name": "마석",
+          "sequence_no": 15
+        },
+        {
+          "station_code": "1320",
+          "station_name": "대성리",
+          "sequence_no": 16
+        },
+        {
+          "station_code": "1321",
+          "station_name": "청평",
+          "sequence_no": 17
+        },
+        {
+          "station_code": "1322",
+          "station_name": "상천",
+          "sequence_no": 18
+        },
+        {
+          "station_code": "1323",
+          "station_name": "가평",
+          "sequence_no": 19
+        },
+        {
+          "station_code": "1324",
+          "station_name": "굴봉산",
+          "sequence_no": 20
+        },
+        {
+          "station_code": "1325",
+          "station_name": "백양리",
+          "sequence_no": 21
+        },
+        {
+          "station_code": "1326",
+          "station_name": "강촌",
+          "sequence_no": 22
+        },
+        {
+          "station_code": "1327",
+          "station_name": "김유정",
+          "sequence_no": 23
+        },
+        {
+          "station_code": "1328",
+          "station_name": "남춘천",
+          "sequence_no": 24
+        },
+        {
+          "station_code": "1329",
+          "station_name": "춘천",
+          "sequence_no": 25
+        }
+      ]
+    },
+    {
+      "line_no": "공항철도",
+      "label": "공항철도",
+      "stations": [
+        {
+          "station_code": "4201",
+          "station_name": "서울",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "4202",
+          "station_name": "공덕",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "4203",
+          "station_name": "홍대입구",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "4204",
+          "station_name": "디지털미디어시티",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "4207",
+          "station_name": "김포공항",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "4208",
+          "station_name": "계양",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "4209",
+          "station_name": "검암",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "4211",
+          "station_name": "운서",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "4212",
+          "station_name": "공항화물청사",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4213",
+          "station_name": "인천공항1터미널",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "4215",
+          "station_name": "인천공항2터미널",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "4206",
+          "station_name": "마곡나루",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "4210",
+          "station_name": "청라국제도시",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "4217",
+          "station_name": "영종",
+          "sequence_no": 14
+        }
+      ]
+    },
+    {
+      "line_no": "김포골드",
+      "label": "김포골드선",
+      "stations": [
+        {
+          "station_code": "4920",
+          "station_name": "양촌",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "4921",
+          "station_name": "구래",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "4922",
+          "station_name": "마산",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "4923",
+          "station_name": "장기",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "4924",
+          "station_name": "운양",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "4925",
+          "station_name": "걸포북변",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "4926",
+          "station_name": "사우",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "4927",
+          "station_name": "풍무",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "4928",
+          "station_name": "고촌",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4929",
+          "station_name": "김포공항",
+          "sequence_no": 10
+        }
+      ]
+    },
+    {
+      "line_no": "서해",
+      "label": "서해선",
+      "stations": [
+        {
+          "station_code": "108C",
+          "station_name": "일산",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "107C",
+          "station_name": "풍산",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "106C",
+          "station_name": "백마",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "105C",
+          "station_name": "곡산",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "103C",
+          "station_name": "대곡",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "104C",
+          "station_name": "능곡",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "1980",
+          "station_name": "김포공항",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "1981",
+          "station_name": "원종",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "1982",
+          "station_name": "부천종합운동장",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4804",
+          "station_name": "소사",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "4805",
+          "station_name": "소새울",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "4806",
+          "station_name": "시흥대야",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "4807",
+          "station_name": "신천",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "4808",
+          "station_name": "신현",
+          "sequence_no": 14
+        },
+        {
+          "station_code": "4809",
+          "station_name": "시흥시청",
+          "sequence_no": 15
+        },
+        {
+          "station_code": "4810",
+          "station_name": "시흥능곡",
+          "sequence_no": 16
+        },
+        {
+          "station_code": "4811",
+          "station_name": "달미",
+          "sequence_no": 17
+        },
+        {
+          "station_code": "4812",
+          "station_name": "선부",
+          "sequence_no": 18
+        },
+        {
+          "station_code": "4813",
+          "station_name": "초지",
+          "sequence_no": 19
+        },
+        {
+          "station_code": "4814",
+          "station_name": "시우",
+          "sequence_no": 20
+        },
+        {
+          "station_code": "4815",
+          "station_name": "원시",
+          "sequence_no": 21
+        }
+      ]
+    },
+    {
+      "line_no": "수인분당",
+      "label": "수인분당선",
+      "stations": [
+        {
+          "station_code": "1845",
+          "station_name": "청량리",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "102C",
+          "station_name": "왕십리",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "1847",
+          "station_name": "서울숲",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "1848",
+          "station_name": "압구정로데오",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "1849",
+          "station_name": "강남구청",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "1850",
+          "station_name": "선정릉",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "1023",
+          "station_name": "선릉",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "1024",
+          "station_name": "한티",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "1025",
+          "station_name": "도곡",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "1026",
+          "station_name": "구룡",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "1027",
+          "station_name": "개포동",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "1028",
+          "station_name": "대모산입구",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "1030",
+          "station_name": "수서",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "1031",
+          "station_name": "복정",
+          "sequence_no": 14
+        },
+        {
+          "station_code": "1851",
+          "station_name": "가천대",
+          "sequence_no": 15
+        },
+        {
+          "station_code": "1852",
+          "station_name": "태평",
+          "sequence_no": 16
+        },
+        {
+          "station_code": "1853",
+          "station_name": "모란",
+          "sequence_no": 17
+        },
+        {
+          "station_code": "1854",
+          "station_name": "야탑",
+          "sequence_no": 18
+        },
+        {
+          "station_code": "1860",
+          "station_name": "이매",
+          "sequence_no": 19
+        },
+        {
+          "station_code": "1855",
+          "station_name": "서현",
+          "sequence_no": 20
+        },
+        {
+          "station_code": "1856",
+          "station_name": "수내",
+          "sequence_no": 21
+        },
+        {
+          "station_code": "1857",
+          "station_name": "정자",
+          "sequence_no": 22
+        },
+        {
+          "station_code": "1858",
+          "station_name": "미금",
+          "sequence_no": 23
+        },
+        {
+          "station_code": "1859",
+          "station_name": "오리",
+          "sequence_no": 24
+        },
+        {
+          "station_code": "1862",
+          "station_name": "죽전",
+          "sequence_no": 25
+        },
+        {
+          "station_code": "1861",
+          "station_name": "보정",
+          "sequence_no": 26
+        },
+        {
+          "station_code": "1863",
+          "station_name": "구성",
+          "sequence_no": 27
+        },
+        {
+          "station_code": "1864",
+          "station_name": "신갈",
+          "sequence_no": 28
+        },
+        {
+          "station_code": "1865",
+          "station_name": "기흥",
+          "sequence_no": 29
+        },
+        {
+          "station_code": "1866",
+          "station_name": "상갈",
+          "sequence_no": 30
+        },
+        {
+          "station_code": "1867",
+          "station_name": "청명",
+          "sequence_no": 31
+        },
+        {
+          "station_code": "1868",
+          "station_name": "영통",
+          "sequence_no": 32
+        },
+        {
+          "station_code": "1869",
+          "station_name": "망포",
+          "sequence_no": 33
+        },
+        {
+          "station_code": "1870",
+          "station_name": "매탄권선",
+          "sequence_no": 34
+        },
+        {
+          "station_code": "1871",
+          "station_name": "수원시청",
+          "sequence_no": 35
+        },
+        {
+          "station_code": "1872",
+          "station_name": "매교",
+          "sequence_no": 36
+        },
+        {
+          "station_code": "1846",
+          "station_name": "수원",
+          "sequence_no": 37
+        },
+        {
+          "station_code": "1873",
+          "station_name": "고색",
+          "sequence_no": 38
+        },
+        {
+          "station_code": "1874",
+          "station_name": "오목천",
+          "sequence_no": 39
+        },
+        {
+          "station_code": "1875",
+          "station_name": "어천",
+          "sequence_no": 40
+        },
+        {
+          "station_code": "1876",
+          "station_name": "야목",
+          "sequence_no": 41
+        },
+        {
+          "station_code": "1877",
+          "station_name": "사리",
+          "sequence_no": 42
+        },
+        {
+          "station_code": "1830",
+          "station_name": "한대앞",
+          "sequence_no": 43
+        },
+        {
+          "station_code": "1831",
+          "station_name": "중앙",
+          "sequence_no": 44
+        },
+        {
+          "station_code": "1832",
+          "station_name": "고잔",
+          "sequence_no": 45
+        },
+        {
+          "station_code": "1833",
+          "station_name": "초지",
+          "sequence_no": 46
+        },
+        {
+          "station_code": "1834",
+          "station_name": "안산",
+          "sequence_no": 47
+        },
+        {
+          "station_code": "1835",
+          "station_name": "신길온천",
+          "sequence_no": 48
+        },
+        {
+          "station_code": "1836",
+          "station_name": "정왕",
+          "sequence_no": 49
+        },
+        {
+          "station_code": "1800",
+          "station_name": "오이도",
+          "sequence_no": 50
+        },
+        {
+          "station_code": "1878",
+          "station_name": "달월",
+          "sequence_no": 51
+        },
+        {
+          "station_code": "1879",
+          "station_name": "월곶",
+          "sequence_no": 52
+        },
+        {
+          "station_code": "1880",
+          "station_name": "소래포구",
+          "sequence_no": 53
+        },
+        {
+          "station_code": "1881",
+          "station_name": "인천논현",
+          "sequence_no": 54
+        },
+        {
+          "station_code": "1882",
+          "station_name": "호구포",
+          "sequence_no": 55
+        },
+        {
+          "station_code": "1883",
+          "station_name": "남동인더스파크",
+          "sequence_no": 56
+        },
+        {
+          "station_code": "1884",
+          "station_name": "원인재",
+          "sequence_no": 57
+        },
+        {
+          "station_code": "1885",
+          "station_name": "연수",
+          "sequence_no": 58
+        },
+        {
+          "station_code": "1886",
+          "station_name": "송도",
+          "sequence_no": 59
+        },
+        {
+          "station_code": "1888",
+          "station_name": "인하대",
+          "sequence_no": 60
+        },
+        {
+          "station_code": "1889",
+          "station_name": "숭의",
+          "sequence_no": 61
+        },
+        {
+          "station_code": "1890",
+          "station_name": "신포",
+          "sequence_no": 62
+        },
+        {
+          "station_code": "1891",
+          "station_name": "인천",
+          "sequence_no": 63
+        }
+      ]
+    },
+    {
+      "line_no": "신림",
+      "label": "신림선",
+      "stations": [
+        {
+          "station_code": "4401",
+          "station_name": "샛강",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "4402",
+          "station_name": "대방",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "4403",
+          "station_name": "서울지방병무청",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "4404",
+          "station_name": "보라매",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "4405",
+          "station_name": "보라매공원",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "4406",
+          "station_name": "보라매병원",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "4407",
+          "station_name": "당곡",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "4408",
+          "station_name": "신림",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "4409",
+          "station_name": "서원",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4410",
+          "station_name": "서울대벤처타운",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "4411",
+          "station_name": "관악산",
+          "sequence_no": 11
+        }
+      ]
+    },
+    {
+      "line_no": "신분당",
+      "label": "신분당선",
+      "stations": [
+        {
+          "station_code": "4304",
+          "station_name": "신사",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "4305",
+          "station_name": "논현",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "4306",
+          "station_name": "신논현",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "4307",
+          "station_name": "강남",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "4308",
+          "station_name": "양재",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "4309",
+          "station_name": "양재시민의숲",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "4310",
+          "station_name": "청계산입구",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "4311",
+          "station_name": "판교",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "4312",
+          "station_name": "정자",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4313",
+          "station_name": "미금",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "4314",
+          "station_name": "동천",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "4315",
+          "station_name": "수지구청",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "4316",
+          "station_name": "성복",
+          "sequence_no": 13
+        },
+        {
+          "station_code": "4317",
+          "station_name": "상현",
+          "sequence_no": 14
+        },
+        {
+          "station_code": "4318",
+          "station_name": "광교중앙",
+          "sequence_no": 15
+        },
+        {
+          "station_code": "4319",
+          "station_name": "광교",
+          "sequence_no": 16
+        }
+      ]
+    },
+    {
+      "line_no": "우이신설",
+      "label": "우이신설선",
+      "stations": [
+        {
+          "station_code": "4701",
+          "station_name": "북한산우이",
+          "sequence_no": 1
+        },
+        {
+          "station_code": "4702",
+          "station_name": "솔밭공원",
+          "sequence_no": 2
+        },
+        {
+          "station_code": "4703",
+          "station_name": "4·19민주묘지",
+          "sequence_no": 3
+        },
+        {
+          "station_code": "4704",
+          "station_name": "가오리",
+          "sequence_no": 4
+        },
+        {
+          "station_code": "4705",
+          "station_name": "화계",
+          "sequence_no": 5
+        },
+        {
+          "station_code": "4706",
+          "station_name": "삼양",
+          "sequence_no": 6
+        },
+        {
+          "station_code": "4707",
+          "station_name": "삼양사거리",
+          "sequence_no": 7
+        },
+        {
+          "station_code": "4708",
+          "station_name": "솔샘",
+          "sequence_no": 8
+        },
+        {
+          "station_code": "4709",
+          "station_name": "북한산보국문",
+          "sequence_no": 9
+        },
+        {
+          "station_code": "4710",
+          "station_name": "정릉",
+          "sequence_no": 10
+        },
+        {
+          "station_code": "4711",
+          "station_name": "성신여대입구",
+          "sequence_no": 11
+        },
+        {
+          "station_code": "4712",
+          "station_name": "보문",
+          "sequence_no": 12
+        },
+        {
+          "station_code": "4713",
+          "station_name": "신설동",
+          "sequence_no": 13
         }
       ]
     }

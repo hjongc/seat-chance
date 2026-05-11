@@ -27,7 +27,7 @@ if (!databaseUrl) {
 const pool = new Pool({
   connectionString: databaseUrl,
   max: 1,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: toPositiveInt(process.env.PG_CONNECTION_TIMEOUT_MS, 30000),
   idleTimeoutMillis: 10000,
   ssl: databaseUrl.includes("sslmode=") ? true : undefined
 });
@@ -80,6 +80,11 @@ function lineLabel(lineNo) {
     return `${lineNo}호선`;
   }
   return lineNo.endsWith("철도") ? lineNo : `${lineNo}선`;
+}
+
+function toPositiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
 async function loadLocalEnv() {
