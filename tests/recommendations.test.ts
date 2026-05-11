@@ -121,7 +121,7 @@ test("returns ranked seat turnover recommendations without probability wording",
   );
   assert.ok(result.recommendations[0].score >= result.recommendations[1].score);
   assert.ok(result.recommendations.some((item) => item.car_no === 2 && item.door_no === 3));
-  assert.match(result.cautions[0], /좌석각 점수는 실제 착석 확률이 아니라/);
+  assert.match(result.cautions[0], /앉을각 점수는 실제 착석 확률이 아니라/);
   assert.doesNotMatch(JSON.stringify(result), /확률 \d+%/);
 });
 

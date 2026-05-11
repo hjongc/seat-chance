@@ -298,7 +298,7 @@ export function HomeClient() {
           <div className="hero-actions" role="group" aria-label="주요 동작">
             <a className="hero-primary" href="#seat-search">
               <Search size={18} aria-hidden="true" />
-              좌석각 찾기
+              앉을각 찾기
             </a>
             <span className="hero-secondary">칸·문 단위 추천</span>
           </div>
@@ -430,7 +430,7 @@ export function HomeClient() {
 
         <button className="primary-action" type="submit" disabled={!canSubmit}>
           <Search size={18} aria-hidden="true" />
-          {loading ? "계산 중" : "좌석각 추천 받기"}
+          {loading ? "계산 중" : "앉을각 추천 받기"}
         </button>
       </form>
 
@@ -486,7 +486,7 @@ function ResultView({
                 </strong>
                 <span className={`grade grade-${item.grade.toLowerCase()}`}>{item.grade}</span>
               </div>
-              <p className="score-text">좌석각 점수 {Math.round(item.score)}점</p>
+              <p className="score-text">앉을각 점수 {Math.round(item.score)}점</p>
               <p className="window-text">예상 기회 구간: {item.expected_seat_window}</p>
               <ul>
                 {item.reasons.map((reason) => (

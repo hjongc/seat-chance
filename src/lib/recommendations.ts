@@ -72,10 +72,10 @@ export function recommendSeatPositions(
       time_slot: usedTimeSlot,
       recommendations: toDataShortageRecommendations(
         layout,
-        "선택한 노선의 승하차 시간대 데이터가 없어 좌석각을 계산하지 못했습니다."
+        "선택한 노선의 승하차 시간대 데이터가 없어 앉을각을 계산하지 못했습니다."
       ),
       cautions: [
-        "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+        "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
         "이 노선은 현재 승하차 시간대 데이터가 부족해 위치별 차이를 계산하지 못했습니다."
       ]
     };
@@ -152,7 +152,7 @@ export function recommendSeatPositions(
     time_slot: usedTimeSlot,
     recommendations,
     cautions: [
-      "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+      "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
       "실제 열차 혼잡, 지연, 행사, 날씨 등은 반영되지 않을 수 있습니다."
     ]
   };
@@ -346,7 +346,7 @@ function toRecommendation(
       score: 0,
       grade: "LOW",
       expected_seat_window: "데이터 부족",
-      reasons: ["호차별 위치를 구분할 출입문 데이터가 부족해 좌석각을 계산하지 못했습니다."]
+      reasons: ["호차별 위치를 구분할 출입문 데이터가 부족해 앉을각을 계산하지 못했습니다."]
     };
   }
 
@@ -440,7 +440,7 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   if (primary && primary.stationDemand > 0.2) {
-    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석각에 유리합니다.`);
+    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 앉을각에 유리합니다.`);
   }
 
   if (primary?.stationCongestionPct !== null && primary?.stationCongestionPct !== undefined) {
@@ -458,7 +458,7 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   if (primary && primary.remainingStops >= 3) {
-    reasons.push("목적지보다 충분히 앞선 구간에서 좌석각이 생길 가능성이 있습니다.");
+    reasons.push("목적지보다 충분히 앞선 구간에서 앉을각이 생길 가능성이 있습니다.");
   } else {
     reasons.push("도착 임박 구간의 기회는 낮게 반영했습니다.");
   }
