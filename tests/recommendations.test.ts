@@ -121,8 +121,86 @@ test("returns ranked seat turnover recommendations without probability wording",
   );
   assert.ok(result.recommendations[0].score >= result.recommendations[1].score);
   assert.ok(result.recommendations.some((item) => item.car_no === 2 && item.door_no === 3));
-  assert.match(result.cautions[0], /좌석각 점수는 실제 착석 확률이 아니라/);
+  assert.match(result.cautions[0], /앉을각 점수는 실제 착석 확률이 아니라/);
   assert.doesNotMatch(JSON.stringify(result), /확률 \d+%/);
+});
+
+test("describes exact and nearby door recommendations differently", () => {
+  const doorDataset: SeatChanceDataset = {
+    stations: ["출발", "환승역", "도착"].map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "8",
+      stationCode: `L8-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "8",
+        branchCode: "MAIN",
+        direction: "도착",
+        carCount: 1,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      {
+        lineNo: "8",
+        stationName: "환승역",
+        dayType: "WEEKDAY",
+        timeSlot: "08:00",
+        boardings: 100,
+        alightings: 4000,
+        source: "test fixture",
+        observedMonth: "2026-05-01"
+      }
+    ],
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "8",
+        stationName: "환승역",
+        direction: "도착",
+        carNo: 1,
+        doorNo: 2,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "출발",
+      destination: "도착",
+      lineNo: "8",
+      direction: "도착",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    doorDataset
+  );
+
+  const exactDoor = result.recommendations.find((item) => item.car_no === 1 && item.door_no === 2);
+  const nearbyDoor = result.recommendations.find((item) => item.car_no === 1 && item.door_no !== 2);
+
+  assert.ok(exactDoor);
+  assert.ok(nearbyDoor);
+  assert.match(exactDoor!.reasons[0], /직접 맞아/);
+  assert.match(nearbyDoor!.reasons[0], /한 문 거리/);
+  assert.notEqual(exactDoor!.reasons[0], nearbyDoor!.reasons[0]);
+  assert.doesNotMatch(JSON.stringify(result.recommendations), /좌석각이 생길/);
 });
 
 test("rounds departure time up to the next half-hour slot", () => {

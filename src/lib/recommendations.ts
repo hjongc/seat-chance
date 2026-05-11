@@ -25,6 +25,7 @@ interface Contribution {
   remainingStops: number;
   score: number;
   hint: DoorHint | null;
+  hintDistance: number | null;
   stationDemand: number;
   transferDemand: number;
   stationCongestionPct: number | null;
@@ -72,10 +73,10 @@ export function recommendSeatPositions(
       time_slot: usedTimeSlot,
       recommendations: toDataShortageRecommendations(
         layout,
-        "선택한 노선의 승하차 시간대 데이터가 없어 좌석각을 계산하지 못했습니다."
+        "선택한 노선의 승하차 시간대 데이터가 없어 앉을각을 계산하지 못했습니다."
       ),
       cautions: [
-        "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+        "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
         "이 노선은 현재 승하차 시간대 데이터가 부족해 위치별 차이를 계산하지 못했습니다."
       ]
     };
@@ -152,7 +153,7 @@ export function recommendSeatPositions(
     time_slot: usedTimeSlot,
     recommendations,
     cautions: [
-      "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+      "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
       "실제 열차 혼잡, 지연, 행사, 날씨 등은 반영되지 않을 수 있습니다."
     ]
   };
@@ -302,6 +303,7 @@ function scoreCandidate({
         remainingStops: intermediateStations.length - index,
         score: contributionScore,
         hint: matchingHint ? matchingHint.hint : null,
+        hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
         transferDemand,
         stationCongestionPct
@@ -346,7 +348,7 @@ function toRecommendation(
       score: 0,
       grade: "LOW",
       expected_seat_window: "데이터 부족",
-      reasons: ["호차별 위치를 구분할 출입문 데이터가 부족해 좌석각을 계산하지 못했습니다."]
+      reasons: ["호차별 위치를 구분할 출입문 데이터가 부족해 앉을각을 계산하지 못했습니다."]
     };
   }
 
@@ -362,7 +364,7 @@ function toRecommendation(
     score,
     grade: toGrade(score),
     expected_seat_window: toExpectedSeatWindow(sortedContributions),
-    reasons: toReasons(sortedContributions)
+    reasons: toReasons(sortedContributions, candidate)
   };
 }
 
@@ -420,19 +422,15 @@ function toExpectedSeatWindow(contributions: Contribution[]): string {
   return fallback ? fallback.stationName : "중간역";
 }
 
-function toReasons(contributions: Contribution[]): string[] {
+function toReasons(contributions: Contribution[], candidate: Candidate): string[] {
   const reasons: string[] = [];
   const primary = contributions.find((contribution) => contribution.hint) ?? contributions[0];
   const secondary = contributions.find(
     (contribution) => contribution.hint && contribution.stationName !== primary?.stationName
   );
 
-  if (primary?.hint?.kind === "transfer") {
-    reasons.push(`${primary.stationName} 하차/환승 수요가 높습니다.`);
-  } else if (primary?.hint?.kind === "facility") {
-    reasons.push(`${primary.stationName} 출구·계단 동선과 가깝습니다.`);
-  } else if (primary) {
-    reasons.push(`${primary.stationName} 하차 수요가 높은 구간입니다.`);
+  if (primary) {
+    reasons.push(toPrimaryReason(primary, candidate));
   }
 
   if (primary && primary.transferDemand > 0.2) {
@@ -440,7 +438,7 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   if (primary && primary.stationDemand > 0.2) {
-    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석각에 유리합니다.`);
+    reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 앉을각에 유리합니다.`);
   }
 
   if (primary?.stationCongestionPct !== null && primary?.stationCongestionPct !== undefined) {
@@ -451,19 +449,60 @@ function toReasons(contributions: Contribution[]): string[] {
     }
   }
 
-  if (secondary?.hint?.kind === "transfer") {
-    reasons.push(`${secondary.stationName} 환승 동선과도 가까운 위치입니다.`);
-  } else if (secondary?.hint?.kind === "facility") {
-    reasons.push(`${secondary.stationName} 빠른하차 동선과도 가깝습니다.`);
+  if (secondary) {
+    reasons.push(toSecondaryReason(secondary, candidate));
   }
 
   if (primary && primary.remainingStops >= 3) {
-    reasons.push("목적지보다 충분히 앞선 구간에서 좌석각이 생길 가능성이 있습니다.");
+    reasons.push("목적지보다 충분히 앞선 구간에서 앉을각이 생길 가능성이 있습니다.");
   } else {
     reasons.push("도착 임박 구간의 기회는 낮게 반영했습니다.");
   }
 
   return reasons;
+}
+
+function toPrimaryReason(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint) {
+    return `${contribution.stationName} 하차 수요가 높은 구간을 기준으로 ${formatDoor(candidate)}을 추천했습니다.`;
+  }
+
+  const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "출구·계단";
+  const demandLabel = contribution.hint.kind === "transfer" ? "하차/환승 수요" : "하차 수요";
+  const relation = toHintRelation(contribution, candidate);
+
+  return `${contribution.stationName} ${hintLabel} 동선${relation} ${demandLabel}를 먼저 받을 수 있습니다.`;
+}
+
+function toSecondaryReason(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint) {
+    return `${contribution.stationName} 하차 수요도 보조로 반영했습니다.`;
+  }
+
+  const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "빠른하차";
+  const relation = toHintRelation(contribution, candidate);
+
+  return `${contribution.stationName} ${hintLabel} 동선${relation} 보조 기회로 반영했습니다.`;
+}
+
+function toHintRelation(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint || contribution.hintDistance === null) {
+    return "";
+  }
+
+  if (contribution.hint.carNo !== candidate.carNo) {
+    return `(${formatDoor(contribution.hint)} 기준)과 같은 칸은 아니지만`;
+  }
+
+  if (contribution.hintDistance === 0) {
+    return `과 ${formatDoor(candidate)}이 직접 맞아`;
+  }
+
+  return `(${formatDoor(contribution.hint)} 기준)에서 한 문 거리라`;
+}
+
+function formatDoor(position: { carNo: number; doorNo: number }): string {
+  return `${position.carNo}-${position.doorNo} 문`;
 }
 
 function roundToTenth(value: number): number {
