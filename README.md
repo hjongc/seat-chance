@@ -31,7 +31,7 @@
 - `CONGESTION_CSV_URL` 또는 `CONGESTION_API_URL_TEMPLATE`
 - `TARGET_LINE_NO`: 로컬 수집 대상 호선. 예: `3`, `신분당`, `우이신설`.
 
-서울 열린데이터광장 승하차 시간대 데이터는 `CardSubwayTime`, 역 정보는 `SearchSTNBySubwayLineInfo`를 사용합니다. 환승정보, 환승역 환승인원정보, 빠른하차정보, 열차운행현황, 혼잡도는 환경변수로 지정한 공공 API/CSV 소스에서 가져옵니다.
+서울 열린데이터광장 승하차 시간대 데이터는 `CardSubwayTime`, 역 정보는 `SearchSTNBySubwayLineInfo`를 사용합니다. 환승정보, 환승역 환승인원정보, 빠른하차정보, 열차운행현황, 혼잡도는 환경변수로 지정한 공공 API/CSV 소스에서 가져옵니다. 혼잡도 소스는 노선 평균 패널티와 역별 좌석 경쟁 보정에 함께 사용합니다.
 
 ## Production Environment
 
