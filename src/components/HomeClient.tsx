@@ -283,72 +283,34 @@ export function HomeClient() {
             <span>Seat Chance</span>
           </span>
         </a>
-        <a className="topbar-cta" href="#seat-search">
-          추천 시작
-        </a>
+        <span className="topbar-meta">{lineLoading ? "노선 확인 중" : `${lineOptions.length}개 노선`}</span>
       </header>
 
-      <section className="landing-hero" aria-labelledby="landing-title">
-        <div className="hero-copy">
-          <p className="hero-eyebrow">Seoul Metro Seat Planner</p>
-          <h1 id="landing-title">앉을각</h1>
-          <p className="hero-lede">
-            승차역, 하차역, 출발 시간을 바탕으로 어느 칸의 어느 문 앞에 서야 할지 바로 정합니다.
-          </p>
-          <div className="hero-actions" role="group" aria-label="주요 동작">
-            <a className="hero-primary" href="#seat-search">
-              <Search size={18} aria-hidden="true" />
-              앉을각 찾기
-            </a>
-            <span className="hero-secondary">칸·문 단위 추천</span>
-          </div>
-          <dl className="hero-metrics" aria-label="서비스 범위">
-            <div>
-              <dt>지원 노선</dt>
-              <dd>{lineLoading ? "확인 중" : `${lineOptions.length}개`}</dd>
-            </div>
-            <div>
-              <dt>추천 단위</dt>
-              <dd>칸·문</dd>
-            </div>
-            <div>
-              <dt>출발 기준</dt>
-              <dd>30분</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="hero-visual" aria-hidden="true">
-          <div className="visual-route">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="visual-card">
-            <span>추천 1순위</span>
-            <strong>3-2 문</strong>
-            <p>하차 수요와 환승 흐름이 만나는 구간</p>
-          </div>
-          <div className="visual-train">
-            {["2-1", "2-2", "3-1", "3-2", "4-1", "4-2"].map((door) => (
-              <span className={door === "3-2" ? "visual-door visual-door-active" : "visual-door"} key={door}>
-                {door}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <form className="search-panel" id="seat-search" onSubmit={handleSubmit}>
+      <form className="search-panel" id="seat-search" aria-labelledby="seat-search-title" onSubmit={handleSubmit}>
         <div className="search-panel-header">
-          <div>
-            <p className="section-eyebrow">추천 조건</p>
-            <h2>출발 전에 위치를 정하세요</h2>
+          <div className="search-title-block">
+            <p className="section-eyebrow">Seat Planner</p>
+            <h1 id="seat-search-title">어디서 타고 어디서 내리나요?</h1>
           </div>
-          <span className="search-status">
-            {direction ? `${lineNo}호선 ${directionLabel(lineNo, direction)}` : "경로 입력"}
-          </span>
+          {direction ? (
+            <span className="search-status">{lineNo}호선 {directionLabel(lineNo, direction)}</span>
+          ) : null}
         </div>
+
+        <dl className="search-meta" aria-label="추천 기준">
+          <div>
+            <dt>지원 노선</dt>
+            <dd>{lineLoading ? "확인 중" : `${lineOptions.length}개`}</dd>
+          </div>
+          <div>
+            <dt>추천 단위</dt>
+            <dd>칸·문</dd>
+          </div>
+          <div>
+            <dt>시간 기준</dt>
+            <dd>30분</dd>
+          </div>
+        </dl>
 
         <div className="search-grid">
           <label className="field">
@@ -498,13 +460,15 @@ function ResultView({
         ))}
       </div>
 
-      <TrainLayout layout={layout} recommendations={recommendation.recommendations} />
-
-      <div className="cautions">
-        {recommendation.cautions.map((caution) => (
-          <p key={caution}>{caution}</p>
-        ))}
-      </div>
+      <details className="result-details">
+        <summary>열차 위치와 참고사항</summary>
+        <TrainLayout layout={layout} recommendations={recommendation.recommendations} />
+        <div className="cautions">
+          {recommendation.cautions.map((caution) => (
+            <p key={caution}>{caution}</p>
+          ))}
+        </div>
+      </details>
     </section>
   );
 }
@@ -664,7 +628,7 @@ function ComboBox({
           {displayedOptions.length > 0 ? (
             showFeaturedOptions ? (
               <>
-                <div className="combo-section-label" role="presentation">주요역</div>
+                <div className="combo-section-label" role="presentation">빠른 선택</div>
                 {featuredOptions.map((option, index) => renderComboOption(option, index))}
                 {regularOptions.length > 0 ? (
                   <div className="combo-section-label" role="presentation">전체 역</div>
@@ -752,7 +716,7 @@ function buildFeaturedStationOptions(
 
   return scoredStations
     .sort((left, right) => right.score - left.score || left.sequenceNo - right.sequenceNo)
-    .slice(0, 10)
+    .slice(0, 6)
     .sort((left, right) => left.sequenceNo - right.sequenceNo)
     .map((station) => station.option);
 }
