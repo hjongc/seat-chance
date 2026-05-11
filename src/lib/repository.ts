@@ -138,18 +138,25 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
   }
 
   async getCachedRecommendation(cacheKey: string, ttlSeconds: number) {
-    const result = await this.pool.query<{ payload: unknown }>(
-      `
-        select payload
-        from recommendation_cache
-        where cache_key = $1
-          and generated_at >= now() - ($2::text || ' seconds')::interval
-        limit 1
-      `,
-      [cacheKey, ttlSeconds]
-    );
+    try {
+      const result = await this.pool.query<{ payload: unknown }>(
+        `
+          select payload
+          from recommendation_cache
+          where cache_key = $1
+            and generated_at >= now() - ($2::text || ' seconds')::interval
+          limit 1
+        `,
+        [cacheKey, ttlSeconds]
+      );
 
-    return result.rows[0]?.payload ?? null;
+      return result.rows[0]?.payload ?? null;
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async setCachedRecommendation({
@@ -162,17 +169,24 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
     timeSlot,
     payload
   }: Parameters<SeatChanceRepository["setCachedRecommendation"]>[0]) {
-    await this.pool.query(
-      `
-        insert into recommendation_cache (
-          cache_key, origin, destination, line_no, direction_code, day_type, time_slot, payload, generated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
-        on conflict (cache_key) do update set
-          payload = excluded.payload,
-          generated_at = excluded.generated_at
-      `,
-      [cacheKey, origin, destination, lineNo, direction, dayType, timeSlot, JSON.stringify(payload)]
-    );
+    try {
+      await this.pool.query(
+        `
+          insert into recommendation_cache (
+            cache_key, origin, destination, line_no, direction_code, day_type, time_slot, payload, generated_at
+          ) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+          on conflict (cache_key) do update set
+            payload = excluded.payload,
+            generated_at = excluded.generated_at
+        `,
+        [cacheKey, origin, destination, lineNo, direction, dayType, timeSlot, JSON.stringify(payload)]
+      );
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return;
+      }
+      throw error;
+    }
   }
 
   async getDataset({ lineNo, direction, dayType, timeSlot }: Parameters<SeatChanceRepository["getDataset"]>[0]) {
@@ -384,12 +398,19 @@ export function getSeatChanceRepository(): SeatChanceRepository {
 
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required. Run the public-data ingestion job before serving APIs.");
+    throw new DataUnavailableError("DB 연결 설정이 없어 추천 데이터를 읽을 수 없습니다.");
   }
 
   repository = new PostgresSeatChanceRepository(createPool(databaseUrl));
 
   return repository;
+}
+
+class DataUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DataUnavailableError";
+  }
 }
 
 export async function getDataStatus(): Promise<DataStatus> {
