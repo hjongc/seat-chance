@@ -48,6 +48,17 @@ create table if not exists congestion_profile (
   primary key (line_no, direction_code, day_type, time_slot)
 );
 
+create table if not exists transfer_demand_profile (
+  line_no text not null,
+  station_name text not null,
+  day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
+  transfer_passengers integer not null check (transfer_passengers >= 0),
+  source text not null,
+  observed_on date not null,
+  ingested_at timestamptz not null default now(),
+  primary key (line_no, station_name, day_type, observed_on)
+);
+
 create table if not exists transfer_door (
   line_no text not null,
   station_name text not null,
@@ -99,6 +110,9 @@ create table if not exists ingestion_run (
 
 create index if not exists ridership_profile_lookup_idx
   on ridership_profile (line_no, day_type, time_slot, observed_month desc);
+
+create index if not exists transfer_demand_profile_lookup_idx
+  on transfer_demand_profile (line_no, day_type, observed_on desc);
 
 create index if not exists transfer_door_lookup_idx
   on transfer_door (line_no, station_name, direction_code);

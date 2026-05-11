@@ -24,12 +24,14 @@
 - `INGEST_REQUEST_TIMEOUT_MS`: 공공 API 요청 타임아웃(ms), 기본값 25000
 - `INGEST_FETCH_ATTEMPTS`: 공공 API 재시도 횟수, 기본값 3 (최대 8)
 - `TRANSFER_CSV_URL` 또는 `TRANSFER_API_URL_TEMPLATE`
+- `TRANSFER_DEMAND_CSV_URL` 또는 `TRANSFER_DEMAND_API_URL_TEMPLATE`: 서울교통공사 환승역 환승인원정보 CSV/API
+- `TRANSFER_DEMAND_OBSERVED_ON`: 환승인원 관측일(YYYY-MM-DD). 소스 URL에 기준일이 없을 때 사용합니다.
 - `FAST_EXIT_API_URL_TEMPLATE`
 - `TRAIN_OPERATION_CSV_URL` 또는 `TRAIN_OPERATION_API_URL_TEMPLATE`
 - `CONGESTION_CSV_URL` 또는 `CONGESTION_API_URL_TEMPLATE`
 - `TARGET_LINE_NO`: 로컬 수집 대상 호선. 예: `3`, `신분당`, `우이신설`.
 
-서울 열린데이터광장 승하차 시간대 데이터는 `CardSubwayTime`, 역 정보는 `SearchSTNBySubwayLineInfo`를 사용합니다. 환승정보, 빠른하차정보, 열차운행현황, 혼잡도는 환경변수로 지정한 공공 API/CSV 소스에서 가져옵니다.
+서울 열린데이터광장 승하차 시간대 데이터는 `CardSubwayTime`, 역 정보는 `SearchSTNBySubwayLineInfo`를 사용합니다. 환승정보, 환승역 환승인원정보, 빠른하차정보, 열차운행현황, 혼잡도는 환경변수로 지정한 공공 API/CSV 소스에서 가져옵니다.
 
 ## Production Environment
 
@@ -53,6 +55,8 @@ SEOUL_OPEN_API_KEY
 SEOUL_REALTIME_SUBWAY_API_KEY
 DATA_GO_KR_API_KEY
 TRANSFER_CSV_URL or TRANSFER_API_URL_TEMPLATE
+TRANSFER_DEMAND_CSV_URL or TRANSFER_DEMAND_API_URL_TEMPLATE
+TRANSFER_DEMAND_OBSERVED_ON (optional)
 FAST_EXIT_API_URL_TEMPLATE
 TRAIN_OPERATION_CSV_URL or TRAIN_OPERATION_API_URL_TEMPLATE
 CONGESTION_CSV_URL or CONGESTION_API_URL_TEMPLATE

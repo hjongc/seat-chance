@@ -62,6 +62,7 @@ const requiredTables = [
   "train_layout",
   "ridership_profile",
   "congestion_profile",
+  "transfer_demand_profile",
   "transfer_door",
   "exit_or_facility_door"
 ] as const;
@@ -173,7 +174,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
   }
 
   async getDataset({ lineNo, direction, dayType, timeSlot }: Parameters<SeatChanceRepository["getDataset"]>[0]) {
-    const [stations, trainLayouts, ridershipProfiles, congestionProfiles, doorHints] =
+    const [stations, trainLayouts, ridershipProfiles, congestionProfiles, transferDemandProfiles, doorHints] =
       await Promise.all([
         this.pool.query<SeatChanceDataset["stations"][number]>(
           `
@@ -241,6 +242,22 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
           `,
           [lineNo, direction, dayType]
         ),
+        this.pool.query<SeatChanceDataset["transferDemandProfiles"][number]>(
+          `
+            select distinct on (line_no, station_name, day_type)
+              line_no as "lineNo",
+              station_name as "stationName",
+              day_type as "dayType",
+              transfer_passengers as "transferPassengers",
+              source,
+              observed_on::text as "observedOn"
+            from transfer_demand_profile
+            where line_no = $1
+              and day_type = $2
+            order by line_no, station_name, day_type, observed_on desc
+          `,
+          [lineNo, dayType]
+        ),
         this.pool.query<DoorHint>(
           `
             select
@@ -280,6 +297,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       trainLayouts: trainLayouts.rows,
       ridershipProfiles: ridershipProfiles.rows,
       congestionProfiles: congestionProfiles.rows,
+      transferDemandProfiles: transferDemandProfiles.rows,
       doorHints: doorHints.rows
     };
   }
