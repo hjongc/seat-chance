@@ -62,11 +62,12 @@ const requiredTables = [
   "train_layout",
   "ridership_profile",
   "congestion_profile",
-  "station_congestion_profile",
-  "transfer_demand_profile",
   "transfer_door",
   "exit_or_facility_door"
 ] as const;
+
+const optionalTables = ["station_congestion_profile", "transfer_demand_profile"] as const;
+const statusTables = [...requiredTables, ...optionalTables] as const;
 
 class PostgresSeatChanceRepository implements SeatChanceRepository {
   constructor(private readonly pool: Pool) {}
@@ -251,39 +252,8 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
           `,
           [lineNo, direction, dayType]
         ),
-        this.pool.query<SeatChanceDataset["stationCongestionProfiles"][number]>(
-          `
-            select
-              line_no as "lineNo",
-              station_name as "stationName",
-              direction_code as "direction",
-              day_type as "dayType",
-              time_slot as "timeSlot",
-              congestion_pct::float as "congestionPct",
-              source
-            from station_congestion_profile
-            where line_no = $1
-              and direction_code = $2
-              and day_type = $3
-          `,
-          [lineNo, direction, dayType]
-        ),
-        this.pool.query<SeatChanceDataset["transferDemandProfiles"][number]>(
-          `
-            select distinct on (line_no, station_name, day_type)
-              line_no as "lineNo",
-              station_name as "stationName",
-              day_type as "dayType",
-              transfer_passengers as "transferPassengers",
-              source,
-              observed_on::text as "observedOn"
-            from transfer_demand_profile
-            where line_no = $1
-              and day_type = $2
-            order by line_no, station_name, day_type, observed_on desc
-          `,
-          [lineNo, dayType]
-        ),
+        this.getStationCongestionProfiles(lineNo, direction, dayType),
+        this.getTransferDemandProfiles(lineNo, dayType),
         this.pool.query<DoorHint>(
           `
             select
@@ -323,10 +293,74 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       trainLayouts: trainLayouts.rows,
       ridershipProfiles: ridershipProfiles.rows,
       congestionProfiles: congestionProfiles.rows,
-      stationCongestionProfiles: stationCongestionProfiles.rows,
-      transferDemandProfiles: transferDemandProfiles.rows,
+      stationCongestionProfiles,
+      transferDemandProfiles,
       doorHints: doorHints.rows
     };
+  }
+
+  private async getStationCongestionProfiles(
+    lineNo: string,
+    direction: DirectionCode,
+    dayType: DayType
+  ): Promise<SeatChanceDataset["stationCongestionProfiles"]> {
+    try {
+      const result = await this.pool.query<SeatChanceDataset["stationCongestionProfiles"][number]>(
+        `
+          select
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            day_type as "dayType",
+            time_slot as "timeSlot",
+            congestion_pct::float as "congestionPct",
+            source
+          from station_congestion_profile
+          where line_no = $1
+            and direction_code = $2
+            and day_type = $3
+        `,
+        [lineNo, direction, dayType]
+      );
+
+      return result.rows;
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  private async getTransferDemandProfiles(
+    lineNo: string,
+    dayType: DayType
+  ): Promise<SeatChanceDataset["transferDemandProfiles"]> {
+    try {
+      const result = await this.pool.query<SeatChanceDataset["transferDemandProfiles"][number]>(
+        `
+          select distinct on (line_no, station_name, day_type)
+            line_no as "lineNo",
+            station_name as "stationName",
+            day_type as "dayType",
+            transfer_passengers as "transferPassengers",
+            source,
+            observed_on::text as "observedOn"
+          from transfer_demand_profile
+          where line_no = $1
+            and day_type = $2
+          order by line_no, station_name, day_type, observed_on desc
+        `,
+        [lineNo, dayType]
+      );
+
+      return result.rows;
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return [];
+      }
+      throw error;
+    }
   }
 }
 
@@ -381,7 +415,7 @@ export async function getDataStatus(): Promise<DataStatus> {
         where table_schema = 'public'
           and table_name = any($1)
       `,
-      [requiredTables]
+      [statusTables]
     );
     const existingTables = new Set(tableCheck.rows.map((row) => row.table_name));
     const missingTables = requiredTables.filter((tableName) => !existingTables.has(tableName));
@@ -397,7 +431,8 @@ export async function getDataStatus(): Promise<DataStatus> {
       };
     }
 
-    const counts = await readTableCounts(statusPool);
+    const countTables = statusTables.filter((tableName) => existingTables.has(tableName));
+    const counts = await readTableCounts(statusPool, countTables);
     const lastIngestion = await readLastIngestion(statusPool);
     const lastSuccessfulIngestion = await readLastSuccessfulIngestion(statusPool);
     const emptyTables = requiredTables.filter((tableName) => counts[tableName] === 0);
@@ -438,9 +473,9 @@ export async function getDataStatus(): Promise<DataStatus> {
   }
 }
 
-async function readTableCounts(pool: Pool): Promise<Record<string, number>> {
+async function readTableCounts(pool: Pool, tableNames: readonly string[]): Promise<Record<string, number>> {
   const entries = await Promise.all(
-    requiredTables.map(async (tableName) => {
+    tableNames.map(async (tableName) => {
       const result = await pool.query<{ rowCount: string }>(
         `select count(*)::text as "rowCount" from ${tableName}`
       );
@@ -449,6 +484,15 @@ async function readTableCounts(pool: Pool): Promise<Record<string, number>> {
   );
 
   return Object.fromEntries(entries);
+}
+
+function isUndefinedTableError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "42P01"
+  );
 }
 
 async function readLastIngestion(pool: Pool): Promise<DataStatus["lastIngestion"]> {
