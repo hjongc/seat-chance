@@ -64,12 +64,57 @@ interface ComboOption {
   label: string;
 }
 
+interface ScoredStationOption {
+  option: ComboOption;
+  score: number;
+  sequenceNo: number;
+}
+
 type DayType = "WEEKDAY" | "WEEKEND";
+
+const featuredStationNames = new Set([
+  "가락시장",
+  "강남",
+  "건대입구",
+  "고속터미널",
+  "공덕",
+  "광화문",
+  "교대",
+  "김포공항",
+  "노원",
+  "대림",
+  "동대문",
+  "동대문역사문화공원",
+  "명동",
+  "사당",
+  "삼성",
+  "서울역",
+  "선릉",
+  "수서",
+  "시청",
+  "신도림",
+  "신림",
+  "신촌",
+  "압구정",
+  "여의도",
+  "영등포구청",
+  "오금",
+  "올림픽공원",
+  "왕십리",
+  "을지로3가",
+  "잠실",
+  "종로3가",
+  "충무로",
+  "합정",
+  "혜화",
+  "홍대입구"
+]);
 
 const dayTypeOptions: Array<{ value: DayType; label: string }> = [
   { value: "WEEKDAY", label: "평일" },
   { value: "WEEKEND", label: "주말·공휴일" }
 ];
+const emptyComboOptions: ComboOption[] = [];
 
 export function HomeClient() {
   const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
@@ -156,6 +201,11 @@ export function HomeClient() {
   const stationComboOptions = useMemo(
     () => stations.map((station) => ({ value: station.station_name, label: station.station_name })),
     [stations]
+  );
+  const stationLineCounts = useMemo(() => countStationLineAppearances(lineOptions), [lineOptions]);
+  const featuredStationComboOptions = useMemo(
+    () => buildFeaturedStationOptions(stations, stationLineCounts),
+    [stationLineCounts, stations]
   );
 
   function applyStations(nextStations: StationOption[]) {
@@ -324,6 +374,7 @@ export function HomeClient() {
               placeholder="승차역 선택 또는 검색"
               value={origin}
               options={stationComboOptions}
+              featuredOptions={featuredStationComboOptions}
               onChange={setOrigin}
               disabled={!lineNo || stationLoading || stations.length === 0}
             />
@@ -338,6 +389,7 @@ export function HomeClient() {
               placeholder="하차역 선택 또는 검색"
               value={destination}
               options={stationComboOptions}
+              featuredOptions={featuredStationComboOptions}
               onChange={setDestination}
               disabled={!lineNo || stationLoading || stations.length === 0}
             />
@@ -511,12 +563,14 @@ function TrainLayout({
 function ComboBox({
   value,
   options,
+  featuredOptions = emptyComboOptions,
   placeholder,
   disabled,
   onChange
 }: {
   value: string;
   options: ComboOption[];
+  featuredOptions?: ComboOption[];
   placeholder: string;
   disabled?: boolean;
   onChange: (value: string) => void;
@@ -528,10 +582,16 @@ function ComboBox({
   const [activeIndex, setActiveIndex] = useState(0);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
   const filteredOptions = useMemo(() => {
-    const matches = options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
-    return matches.slice(0, 24);
+    return options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
   }, [options, query]);
-  const activeOption = filteredOptions[activeIndex];
+  const showFeaturedOptions = !normalizeSearchText(query) && featuredOptions.length > 0;
+  const featuredValues = useMemo(() => new Set(featuredOptions.map((option) => option.value)), [featuredOptions]);
+  const regularOptions = useMemo(
+    () => (showFeaturedOptions ? filteredOptions.filter((option) => !featuredValues.has(option.value)) : filteredOptions),
+    [featuredValues, filteredOptions, showFeaturedOptions]
+  );
+  const displayedOptions = showFeaturedOptions ? [...featuredOptions, ...regularOptions] : filteredOptions;
+  const activeOption = displayedOptions[activeIndex];
 
   useEffect(() => {
     setQuery(selectedLabel);
@@ -539,7 +599,7 @@ function ComboBox({
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, options]);
+  }, [featuredOptions, options, query]);
 
   function handleQueryChange(nextQuery: string) {
     setQuery(nextQuery);
@@ -559,7 +619,7 @@ function ComboBox({
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setOpen(true);
-      setActiveIndex((index) => Math.min(index + 1, Math.max(filteredOptions.length - 1, 0)));
+      setActiveIndex((index) => Math.min(index + 1, Math.max(displayedOptions.length - 1, 0)));
       return;
     }
 
@@ -601,29 +661,19 @@ function ComboBox({
       />
       {open && !disabled ? (
         <div className="combo-menu" id={listboxId} role="listbox">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, index) => (
-              <button
-                aria-selected={option.value === value}
-                className={[
-                  "combo-option",
-                  option.value === value ? "combo-option-selected" : "",
-                  index === activeIndex ? "combo-option-active" : ""
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                id={optionId(inputId, option.value)}
-                key={option.value}
-                onMouseDown={(event) => event.preventDefault()}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => selectOption(option)}
-                role="option"
-                tabIndex={-1}
-                type="button"
-              >
-                {option.label}
-              </button>
-            ))
+          {displayedOptions.length > 0 ? (
+            showFeaturedOptions ? (
+              <>
+                <div className="combo-section-label" role="presentation">주요역</div>
+                {featuredOptions.map((option, index) => renderComboOption(option, index))}
+                {regularOptions.length > 0 ? (
+                  <div className="combo-section-label" role="presentation">전체 역</div>
+                ) : null}
+                {regularOptions.map((option, index) => renderComboOption(option, featuredOptions.length + index))}
+              </>
+            ) : (
+              filteredOptions.map((option, index) => renderComboOption(option, index))
+            )
           ) : (
             <div className="combo-empty">검색 결과 없음</div>
           )}
@@ -631,6 +681,31 @@ function ComboBox({
       ) : null}
     </div>
   );
+
+  function renderComboOption(option: ComboOption, index: number) {
+    return (
+      <button
+        aria-selected={option.value === value}
+        className={[
+          "combo-option",
+          option.value === value ? "combo-option-selected" : "",
+          index === activeIndex ? "combo-option-active" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        id={optionId(inputId, option.value)}
+        key={`${index}-${option.value}`}
+        onMouseDown={(event) => event.preventDefault()}
+        onMouseEnter={() => setActiveIndex(index)}
+        onClick={() => selectOption(option)}
+        role="option"
+        tabIndex={-1}
+        type="button"
+      >
+        {option.label}
+      </button>
+    );
+  }
 }
 
 function optionId(inputId: string, value: string) {
@@ -648,6 +723,55 @@ function sortLines(lines: LineOption[]) {
     return left.line_no.localeCompare(right.line_no);
   });
   return nextLines;
+}
+
+function buildFeaturedStationOptions(
+  stations: StationOption[],
+  stationLineCounts: Map<string, number>
+): ComboOption[] {
+  const scoredStations = stations
+    .map<ScoredStationOption | null>((station, index) => {
+      const normalizedName = normalizeStationName(station.station_name);
+      const transferLineCount = stationLineCounts.get(normalizedName) ?? 1;
+      const isTerminal = index === 0 || index === stations.length - 1;
+      const isTransfer = transferLineCount > 1;
+      const isFeaturedByName = featuredStationNames.has(normalizedName);
+      const score = (isTransfer ? transferLineCount * 10 : 0) + (isFeaturedByName ? 7 : 0) + (isTerminal ? 4 : 0);
+
+      if (score === 0) {
+        return null;
+      }
+
+      return {
+        option: { value: station.station_name, label: station.station_name },
+        score,
+        sequenceNo: station.sequence_no
+      };
+    })
+    .filter((station): station is ScoredStationOption => station !== null);
+
+  return scoredStations
+    .sort((left, right) => right.score - left.score || left.sequenceNo - right.sequenceNo)
+    .slice(0, 10)
+    .sort((left, right) => left.sequenceNo - right.sequenceNo)
+    .map((station) => station.option);
+}
+
+function countStationLineAppearances(lines: LineOption[]) {
+  const counts = new Map<string, number>();
+
+  for (const line of lines) {
+    const lineStationNames = new Set(line.stations.map((station) => normalizeStationName(station.station_name)));
+    for (const stationName of lineStationNames) {
+      counts.set(stationName, (counts.get(stationName) ?? 0) + 1);
+    }
+  }
+
+  return counts;
+}
+
+function normalizeStationName(value: string) {
+  return value.replace(/\([^)]*\)/g, "").trim();
 }
 
 function matchesSearch(label: string, query: string) {

@@ -639,6 +639,14 @@ a:focus-visible {
   font-weight: 800;
 }
 
+.combo-section-label {
+  color: var(--muted);
+  font-size: var(--text-2xs);
+  font-weight: 900;
+  letter-spacing: 0;
+  padding: 8px 10px 4px;
+}
+
 .combo-empty {
   color: var(--muted);
   font-size: var(--text-sm);
