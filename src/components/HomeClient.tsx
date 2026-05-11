@@ -528,8 +528,7 @@ function ComboBox({
   const [activeIndex, setActiveIndex] = useState(0);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
   const filteredOptions = useMemo(() => {
-    const matches = options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
-    return matches.slice(0, 24);
+    return options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
   }, [options, query]);
   const activeOption = filteredOptions[activeIndex];
 
