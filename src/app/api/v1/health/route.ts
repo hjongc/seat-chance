@@ -1,4 +1,5 @@
 import { cachedJsonResponse, errorResponse } from "@/lib/api";
+import { evaluateHealth, positiveNumber } from "@/lib/health";
 import { getDataStatus } from "@/lib/repository";
 
 export const runtime = "nodejs";
@@ -6,21 +7,22 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const status = await getDataStatus();
-    const lastFinishedAt = status.lastSuccessfulIngestion?.finishedAt
-      ? new Date(status.lastSuccessfulIngestion.finishedAt).getTime()
-      : 0;
-    const maxAgeHours = Number(process.env.HEALTH_MAX_INGESTION_AGE_HOURS ?? 48);
-    const ingestionFresh =
-      lastFinishedAt > 0 && Date.now() - lastFinishedAt <= maxAgeHours * 60 * 60 * 1000;
-    const ok = status.ready && ingestionFresh;
+    const health = evaluateHealth({
+      status,
+      maxAgeHours: positiveNumber(process.env.HEALTH_MAX_INGESTION_AGE_HOURS, 45 * 24),
+      minStationRows: positiveNumber(process.env.HEALTH_MIN_STATION_ROWS, 500)
+    });
 
     return cachedJsonResponse(
       {
-        ok,
+        ok: health.ok,
         ready: status.ready,
         status: status.status,
-        ingestion_fresh: ingestionFresh,
-        max_ingestion_age_hours: maxAgeHours,
+        ingestion_fresh: health.ingestionFresh,
+        station_coverage_ready: health.stationCoverageReady,
+        max_ingestion_age_hours: health.maxAgeHours,
+        min_station_rows: health.minStationRows,
+        station_rows: status.counts.station_line_order ?? 0,
         last_ingestion: status.lastIngestion
           ? {
               source_name: status.lastIngestion.sourceName,
@@ -37,7 +39,7 @@ export async function GET() {
           : null
       },
       "public, max-age=15, s-maxage=60, stale-while-revalidate=300",
-      { status: ok ? 200 : 503 }
+      { status: health.ok ? 200 : 503 }
     );
   } catch (error) {
     return errorResponse(error);
