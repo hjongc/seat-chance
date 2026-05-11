@@ -62,6 +62,7 @@ const requiredTables = [
   "train_layout",
   "ridership_profile",
   "congestion_profile",
+  "station_congestion_profile",
   "transfer_demand_profile",
   "transfer_door",
   "exit_or_facility_door"
@@ -174,7 +175,15 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
   }
 
   async getDataset({ lineNo, direction, dayType, timeSlot }: Parameters<SeatChanceRepository["getDataset"]>[0]) {
-    const [stations, trainLayouts, ridershipProfiles, congestionProfiles, transferDemandProfiles, doorHints] =
+    const [
+      stations,
+      trainLayouts,
+      ridershipProfiles,
+      congestionProfiles,
+      stationCongestionProfiles,
+      transferDemandProfiles,
+      doorHints
+    ] =
       await Promise.all([
         this.pool.query<SeatChanceDataset["stations"][number]>(
           `
@@ -242,6 +251,23 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
           `,
           [lineNo, direction, dayType]
         ),
+        this.pool.query<SeatChanceDataset["stationCongestionProfiles"][number]>(
+          `
+            select
+              line_no as "lineNo",
+              station_name as "stationName",
+              direction_code as "direction",
+              day_type as "dayType",
+              time_slot as "timeSlot",
+              congestion_pct::float as "congestionPct",
+              source
+            from station_congestion_profile
+            where line_no = $1
+              and direction_code = $2
+              and day_type = $3
+          `,
+          [lineNo, direction, dayType]
+        ),
         this.pool.query<SeatChanceDataset["transferDemandProfiles"][number]>(
           `
             select distinct on (line_no, station_name, day_type)
@@ -297,6 +323,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       trainLayouts: trainLayouts.rows,
       ridershipProfiles: ridershipProfiles.rows,
       congestionProfiles: congestionProfiles.rows,
+      stationCongestionProfiles: stationCongestionProfiles.rows,
       transferDemandProfiles: transferDemandProfiles.rows,
       doorHints: doorHints.rows
     };

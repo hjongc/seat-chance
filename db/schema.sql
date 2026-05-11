@@ -48,6 +48,19 @@ create table if not exists congestion_profile (
   primary key (line_no, direction_code, day_type, time_slot)
 );
 
+create table if not exists station_congestion_profile (
+  line_no text not null,
+  station_name text not null,
+  direction_code text not null,
+  day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
+  time_slot text not null check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$'),
+  congestion_pct numeric(5, 2) not null check (congestion_pct >= 0),
+  source text not null,
+  observed_on date,
+  ingested_at timestamptz not null default now(),
+  primary key (line_no, station_name, direction_code, day_type, time_slot)
+);
+
 create table if not exists transfer_demand_profile (
   line_no text not null,
   station_name text not null,
@@ -111,6 +124,9 @@ create table if not exists ingestion_run (
 create index if not exists ridership_profile_lookup_idx
   on ridership_profile (line_no, day_type, time_slot, observed_month desc);
 
+create index if not exists station_congestion_profile_lookup_idx
+  on station_congestion_profile (line_no, direction_code, day_type, time_slot, station_name);
+
 create index if not exists transfer_demand_profile_lookup_idx
   on transfer_demand_profile (line_no, day_type, observed_on desc);
 
@@ -135,6 +151,13 @@ alter table congestion_profile
 
 alter table congestion_profile
   add constraint congestion_profile_time_slot_check
+  check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$');
+
+alter table station_congestion_profile
+  drop constraint if exists station_congestion_profile_time_slot_check;
+
+alter table station_congestion_profile
+  add constraint station_congestion_profile_time_slot_check
   check (time_slot ~ '^([01][0-9]|2[0-3]):(00|30)$');
 
 alter table train_layout
