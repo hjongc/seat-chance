@@ -388,10 +388,7 @@ function TrainLayout({
           return (
             <div className="car-column" key={carNo}>
               <div className="car-label">{carNo}호차</div>
-              <div
-                className="door-row"
-                style={{ gridTemplateColumns: `repeat(${layout.doors_per_car}, minmax(0, 1fr))` }}
-              >
+              <div className="door-row">
                 {Array.from({ length: layout.doors_per_car }, (_, doorIndex) => {
                   const doorNo = doorIndex + 1;
                   const rank = rankedDoors.get(`${carNo}-${doorNo}`);
