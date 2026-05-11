@@ -1,4 +1,5 @@
 import type { DayType } from "./types";
+import { dayTypeForKoreaDate, toKoreaDateParts } from "./day-type";
 
 export function toTimeSlot(datetime: string): string {
   const { hour, minute } = toKstDateTimeParts(datetime);
@@ -14,8 +15,7 @@ function toHalfHourSlot(hour: number, minute: number) {
 }
 
 export function toDayType(datetime: string): DayType {
-  const { weekday } = toKstDateTimeParts(datetime);
-  return weekday === "Sat" || weekday === "Sun" ? "WEEKEND" : "WEEKDAY";
+  return dayTypeForKoreaDate(toKstDateTimeParts(datetime));
 }
 
 function toKstDateTimeParts(datetime: string) {
@@ -25,16 +25,15 @@ function toKstDateTimeParts(datetime: string) {
   if (localMatch?.groups) {
     const hour = Number(localMatch.groups.hour);
     const minute = Number(localMatch.groups.minute);
+    const year = Number(localMatch.groups.year);
+    const month = Number(localMatch.groups.month);
+    const day = Number(localMatch.groups.day);
     assertValidTime(hour, minute);
     const weekday = new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Seoul",
       weekday: "short"
-    }).format(
-      new Date(
-        Date.UTC(Number(localMatch.groups.year), Number(localMatch.groups.month) - 1, Number(localMatch.groups.day))
-      )
-    );
-    return { hour, minute, weekday };
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+    return { year, month, day, hour, minute, weekday };
   }
 
   const date = new Date(datetime);
@@ -42,19 +41,18 @@ function toKstDateTimeParts(datetime: string) {
     throw new RecommendationInputError("datetime 값이 올바른 ISO 날짜가 아닙니다.");
   }
 
+  const dateParts = toKoreaDateParts(date);
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
     hourCycle: "h23",
     hour: "2-digit",
-    minute: "2-digit",
-    weekday: "short"
+    minute: "2-digit"
   }).formatToParts(date);
   const hour = Number(parts.find((part) => part.type === "hour")?.value);
   const minute = Number(parts.find((part) => part.type === "minute")?.value);
-  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
 
   assertValidTime(hour, minute);
-  return { hour, minute, weekday };
+  return { ...dateParts, hour, minute };
 }
 
 function assertValidTime(hour: number, minute: number) {

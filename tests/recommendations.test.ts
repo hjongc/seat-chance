@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recommendSeatPositions } from "../src/lib/recommendations";
+import { currentKoreaDayType, isKoreanPublicHoliday } from "../src/lib/day-type";
 import { toDayType, toTimeSlot } from "../src/lib/time";
 import type { SeatChanceDataset } from "../src/lib/types";
 
@@ -213,6 +214,18 @@ test("rounds departure time up to the next half-hour slot", () => {
 test("uses Korea time for offset datetimes", () => {
   assert.equal(toTimeSlot("2026-05-08T01:10:00Z"), "10:30");
   assert.equal(toDayType("2026-05-08T01:10:00Z"), "WEEKDAY");
+});
+
+test("treats Korean public holidays as weekend day type", () => {
+  assert.equal(currentKoreaDayType(new Date("2026-04-30T15:10:00Z")), "WEEKEND");
+  assert.equal(toDayType("2026-05-01T08:00:00+09:00"), "WEEKEND");
+  assert.equal(toDayType("2026-05-05T08:00:00+09:00"), "WEEKEND");
+  assert.equal(toDayType("2026-07-17T08:00:00+09:00"), "WEEKEND");
+});
+
+test("supports substitute holidays for modern supplemental Korean holidays", () => {
+  assert.equal(isKoreanPublicHoliday(2027, 5, 3), true);
+  assert.equal(isKoreanPublicHoliday(2027, 7, 19), true);
 });
 
 test("supports non-line-3 terminal directions with fallback layout", () => {

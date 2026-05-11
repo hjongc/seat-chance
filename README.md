@@ -94,4 +94,4 @@ GET /api/v1/recommendations?origin=연천&destination=신창&line_no=1&direction
 GET /api/v1/health
 ```
 
-`datetime` remains supported as a compatibility fallback when `day_type` and `time_slot` are not provided.
+`datetime` remains supported as a compatibility fallback when `day_type` and `time_slot` are not provided. It is interpreted in Korea time and maps Korean public holidays to `WEEKEND`.
