@@ -352,7 +352,7 @@ export async function getDataStatus(): Promise<DataStatus> {
       };
     }
 
-    const counts = await readTablePresence(statusPool);
+    const counts = await readTableCounts(statusPool);
     const lastIngestion = await readLastIngestion(statusPool);
     const lastSuccessfulIngestion = await readLastSuccessfulIngestion(statusPool);
     const emptyTables = requiredTables.filter((tableName) => counts[tableName] === 0);
@@ -393,13 +393,13 @@ export async function getDataStatus(): Promise<DataStatus> {
   }
 }
 
-async function readTablePresence(pool: Pool): Promise<Record<string, number>> {
+async function readTableCounts(pool: Pool): Promise<Record<string, number>> {
   const entries = await Promise.all(
     requiredTables.map(async (tableName) => {
-      const result = await pool.query<{ hasRows: boolean }>(
-        `select exists(select 1 from ${tableName} limit 1) as "hasRows"`
+      const result = await pool.query<{ rowCount: string }>(
+        `select count(*)::text as "rowCount" from ${tableName}`
       );
-      return [tableName, result.rows[0]?.hasRows ? 1 : 0] as const;
+      return [tableName, Number(result.rows[0]?.rowCount ?? 0)] as const;
     })
   );
 
