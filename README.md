@@ -89,7 +89,9 @@ npm run dev
 GET /transit-lines.json
 GET /api/v1/stations?line_no=3
 GET /api/v1/train-layout?line_no=3&direction=오금
-GET /api/v1/recommendations?origin=경복궁&destination=신사&line_no=3&direction=오금&datetime=2026-05-07T08:30:00+09:00&mode=seat
-GET /api/v1/recommendations?origin=연천&destination=신창&line_no=1&direction=신창&datetime=2026-05-07T08:30:00+09:00&mode=seat
+GET /api/v1/recommendations?origin=경복궁&destination=신사&line_no=3&direction=오금&day_type=WEEKDAY&time_slot=08:30&mode=seat
+GET /api/v1/recommendations?origin=연천&destination=신창&line_no=1&direction=신창&day_type=WEEKEND&time_slot=08:30&mode=seat
 GET /api/v1/health
 ```
+
+`datetime` remains supported as a compatibility fallback when `day_type` and `time_slot` are not provided.

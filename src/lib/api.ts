@@ -1,4 +1,4 @@
-import type { DirectionCode, RecommendationMode } from "./types";
+import type { DayType, DirectionCode, RecommendationMode } from "./types";
 
 export function parseDirection(value: string | null): DirectionCode {
   const direction = value?.trim() ?? "";
@@ -20,6 +20,21 @@ export function parseMode(value: string | null): RecommendationMode {
     return "seat";
   }
   throw new ApiInputError("mode는 seat만 지원합니다.");
+}
+
+export function parseDayType(value: string | null): DayType {
+  if (value === "WEEKDAY" || value === "WEEKEND") {
+    return value;
+  }
+  throw new ApiInputError("day_type 값은 WEEKDAY 또는 WEEKEND여야 합니다.");
+}
+
+export function parseTimeSlot(value: string | null): string {
+  const timeSlot = value?.trim() ?? "";
+  if (/^([01][0-9]|2[0-3]):(00|30)$/.test(timeSlot)) {
+    return timeSlot;
+  }
+  throw new ApiInputError("time_slot 값은 HH:00 또는 HH:30 형식이어야 합니다.");
 }
 
 export function requiredParam(params: URLSearchParams, key: string): string {

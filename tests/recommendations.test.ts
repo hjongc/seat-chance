@@ -107,7 +107,8 @@ test("returns ranked seat turnover recommendations without probability wording",
       destination: "신사",
       lineNo: "3",
       direction: "오금",
-      datetime: "2026-05-07T08:30:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:30",
       mode: "seat"
     },
     dataset
@@ -170,7 +171,8 @@ test("supports non-line-3 terminal directions with fallback layout", () => {
       destination: "신창",
       lineNo: "1",
       direction: "신창",
-      datetime: "2026-05-07T08:00:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
       mode: "seat"
     },
     lineOneDataset
@@ -190,7 +192,8 @@ test("returns data-shortage recommendations when ridership data is unavailable",
       destination: "신사",
       lineNo: "3",
       direction: "오금",
-      datetime: "2026-05-07T08:30:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:30",
       mode: "seat"
     },
     {
@@ -279,7 +282,8 @@ test("uses transfer passenger demand when transfer alightings are low", () => {
       destination: "도착",
       lineNo: "5",
       direction: "도착",
-      datetime: "2026-05-07T08:00:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
       mode: "seat"
     },
     transferDataset
@@ -379,7 +383,8 @@ test("discounts seat turnover at highly crowded intermediate stations", () => {
       destination: "도착",
       lineNo: "6",
       direction: "도착",
-      datetime: "2026-05-07T08:00:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
       mode: "seat"
     },
     crowdingDataset
@@ -399,7 +404,8 @@ test("rejects reverse route when direction does not match station order", () => 
           destination: "경복궁",
           lineNo: "3",
           direction: "오금",
-          datetime: "2026-05-07T08:30:00+09:00",
+          dayType: "WEEKDAY",
+          timeSlot: "08:30",
           mode: "seat"
         },
         dataset
@@ -464,7 +470,8 @@ test("supports line 2 circular routes across the sequence boundary", () => {
       destination: "을지로입구",
       lineNo: "2",
       direction: "내선",
-      datetime: "2026-05-07T08:00:00+09:00",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
       mode: "seat"
     },
     lineTwoDataset
