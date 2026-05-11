@@ -123,7 +123,6 @@ function parseTargetLineNos(raw) {
 }
 
 async function ingestStationOrder() {
-  await client.query("delete from station_line_order where operator = $1 and line_no = $2", [operator, targetLineNo]);
   const rows = await fetchSeoulRows("SearchSTNBySubwayLineInfo", [
     "",
     "",
@@ -136,6 +135,8 @@ async function ingestStationOrder() {
   if (lineRows.length === 0) {
     throw new Error(`No station rows returned for line ${targetLineNo}.`);
   }
+
+  await client.query("delete from station_line_order where operator = $1 and line_no = $2", [operator, targetLineNo]);
 
   let sequenceNo = 0;
   for (const row of lineRows) {
@@ -687,8 +688,7 @@ async function ingestWithLog(sourceName, sourceUrlValue, fn, options = {}) {
 }
 
 async function fetchSeoulRows(service, tailSegments = []) {
-  const safeTailSegments = tailSegments.filter((segment) => String(segment).trim() !== "");
-  const firstUrl = seoulUrl(service, 1, 1000, safeTailSegments);
+  const firstUrl = seoulUrl(service, 1, 1000, tailSegments);
   const first = await fetchJson(firstUrl);
   const payload = first[service] ?? first[Object.keys(first)[0]];
   assertSeoulPayload(payload, firstUrl);
@@ -791,7 +791,6 @@ function extractTotalCount(payload) {
 }
 
 function seoulUrl(service, start, end, tailSegments) {
-  const filteredSegments = (tailSegments ?? []).filter((segment) => String(segment).trim() !== "");
   return [
     "http://openapi.seoul.go.kr:8088",
     encodeURIComponent(seoulApiKey),
@@ -799,7 +798,7 @@ function seoulUrl(service, start, end, tailSegments) {
     service,
     String(start),
     String(end),
-    ...filteredSegments.map((segment) => encodeURIComponent(segment))
+    ...(tailSegments ?? []).map((segment) => encodeURIComponent(String(segment ?? "")))
   ].join("/");
 }
 
