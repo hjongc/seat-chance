@@ -292,7 +292,7 @@ function createPool(databaseUrl: string) {
   return new Pool({
     connectionString: databaseUrl,
     max: Number(process.env.PG_POOL_MAX ?? 3),
-    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 5000),
+    connectionTimeoutMillis: Number(process.env.PG_CONNECTION_TIMEOUT_MS ?? 30000),
     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS ?? 10000),
     ssl: databaseUrl.includes("sslmode=") ? true : undefined
   });

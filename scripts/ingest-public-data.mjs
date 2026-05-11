@@ -1,5 +1,4 @@
 import { mkdir, rename, readFile, writeFile } from "node:fs/promises";
-import { request as httpsRequest } from "node:https";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -15,7 +14,7 @@ const seoulApiKey = requiredEnv("SEOUL_OPEN_API_KEY");
 const dataGoKrApiKey = process.env.DATA_GO_KR_API_KEY ?? "";
 const databaseUrl = requiredEnv("DATABASE_URL");
 const configuredTargetLineNos = parseTargetLineNos(process.env.TARGET_LINE_NO);
-const ingestFetchTimeoutMs = toPositiveInt(process.env.INGEST_REQUEST_TIMEOUT_MS, 25000);
+const ingestFetchTimeoutMs = toPositiveInt(process.env.INGEST_REQUEST_TIMEOUT_MS, 60000);
 const ingestFetchAttempts = Math.min(Math.max(toPositiveInt(process.env.INGEST_FETCH_ATTEMPTS, 3), 1), 8);
 const defaultCsvUrls = {
   TRANSFER:
@@ -163,7 +162,14 @@ async function ingestStationOrder() {
 }
 
 async function ingestRidershipProfiles() {
-  const { month, lineRows } = await fetchRidershipRows();
+  const rows = await fetchRidershipRows();
+  if (!rows) {
+    await client.query("delete from ridership_profile where line_no = $1", [targetLineNo]);
+    console.warn(`No ridership rows returned for line ${targetLineNo}; recommendations will use data-shortage fallback.`);
+    return 0;
+  }
+
+  const { month, lineRows } = rows;
   const hourFields = ridershipHourFields();
   const observedMonth = `${month.slice(0, 4)}-${month.slice(4, 6)}-01`;
   const source = `서울 열린데이터광장 CardSubwayTime ${month} monthly day-type aggregate`;
@@ -281,7 +287,7 @@ async function fetchRidershipRows() {
     }
   }
 
-  throw new Error(`No ridership rows returned for line ${targetLineNo}, month ${targetMonth} or recent fallback months.`);
+  return null;
 }
 
 async function ingestTransferDoors() {
@@ -742,12 +748,6 @@ async function fetchResource(url) {
         timeoutMs: ingestFetchTimeoutMs
       });
     } catch (error) {
-      if (canRetryWithoutCertificateVerification(url, error)) {
-        return fetchWithHttpsRequest(url, {
-          accept: "application/json,text/csv,text/plain,*/*",
-          "user-agent": "seat-chance-ingest/0.1"
-        });
-      }
       lastError = error;
       if (attempt < ingestFetchAttempts) {
         await wait(250 * attempt);
@@ -755,10 +755,11 @@ async function fetchResource(url) {
     }
   }
 
-  if (lastError instanceof Error) {
-    throw lastError;
-  }
-  throw new Error(`Failed to fetch ${redactUrl(url)} after ${ingestFetchAttempts} attempts`);
+  throw new Error(
+    `Failed to fetch ${redactUrl(url)} after ${ingestFetchAttempts} attempts (${ingestFetchTimeoutMs}ms timeout): ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`
+  );
 }
 
 async function fetchWithTimeout(url, { headers, timeoutMs }) {
@@ -772,56 +773,6 @@ async function fetchWithTimeout(url, { headers, timeoutMs }) {
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function canRetryWithoutCertificateVerification(url, error) {
-  return (
-    url.includes("api.seoulmetro.co.kr:21000") &&
-    error instanceof Error &&
-    error.cause?.code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE"
-  );
-}
-
-function fetchWithHttpsRequest(url, headers) {
-  return new Promise((resolve, reject) => {
-    const request = httpsRequest(
-      url,
-      {
-        headers,
-        rejectUnauthorized: false
-      },
-      (response) => {
-        const chunks = [];
-
-        response.on("data", (chunk) => {
-          chunks.push(chunk);
-        });
-        response.on("end", () => {
-          const body = Buffer.concat(chunks);
-          resolve({
-            ok: response.statusCode >= 200 && response.statusCode < 300,
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            headers: {
-              get(name) {
-                const value = response.headers[name.toLowerCase()];
-                return Array.isArray(value) ? value.join(",") : value ?? null;
-              }
-            },
-            async text() {
-              return body.toString("utf8");
-            },
-            async arrayBuffer() {
-              return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
-            }
-          });
-        });
-      }
-    );
-
-    request.on("error", reject);
-    request.end();
-  });
 }
 
 function wait(ms) {

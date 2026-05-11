@@ -61,7 +61,21 @@ export function recommendSeatPositions(
   const usedTimeSlot = profiles[0]?.timeSlot ?? timeSlot;
 
   if (profiles.length === 0) {
-    throw new RecommendationInputError("선택한 시간대 주변의 승하차 데이터가 없어 추천할 수 없습니다.");
+    return {
+      origin: request.origin,
+      destination: request.destination,
+      line_no: request.lineNo,
+      direction: request.direction,
+      time_slot: usedTimeSlot,
+      recommendations: toDataShortageRecommendations(
+        layout,
+        "선택한 노선의 승하차 시간대 데이터가 없어 좌석각을 계산하지 못했습니다."
+      ),
+      cautions: [
+        "좌석각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
+        "이 노선은 현재 승하차 시간대 데이터가 부족해 위치별 차이를 계산하지 못했습니다."
+      ]
+    };
   }
 
   const maxAlightings = Math.max(1, ...profiles.map((profile) => profile.alightings));
@@ -334,6 +348,20 @@ function toRecommendation(
     expected_seat_window: toExpectedSeatWindow(sortedContributions),
     reasons: toReasons(sortedContributions)
   };
+}
+
+function toDataShortageRecommendations(layout: TrainLayout, reason: string): Recommendation[] {
+  return buildDoorCandidates(layout)
+    .slice(0, 3)
+    .map((candidate, index) => ({
+      rank: index + 1,
+      car_no: candidate.carNo,
+      door_no: candidate.doorNo,
+      score: 0,
+      grade: "LOW",
+      expected_seat_window: "데이터 부족",
+      reasons: [reason]
+    }));
 }
 
 function getCongestionPenalty(profile: CongestionProfile | undefined): number {
