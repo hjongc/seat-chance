@@ -8,7 +8,7 @@ import {
   TrainFront
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { forwardDirectionName, reverseDirectionName } from "@/lib/directions";
+import { directionLabel, inferDirectionName } from "@/lib/directions";
 
 interface StationOption {
   station_code: string;
@@ -113,24 +113,21 @@ export function HomeClient() {
     };
   }, []);
 
-  const originOrder = useMemo(
-    () => stations.find((station) => station.station_name === origin)?.sequence_no ?? 0,
-    [origin, stations]
+  const directionStations = useMemo(
+    () => stations.map((station) => ({ stationName: station.station_name, sequenceNo: station.sequence_no })),
+    [stations]
   );
-  const destinationOrder = useMemo(
-    () => stations.find((station) => station.station_name === destination)?.sequence_no ?? 0,
-    [destination, stations]
-  );
+  const direction = useMemo(() => {
+    if (!lineNo || !origin || !destination || origin === destination) {
+      return "";
+    }
 
-  const direction = useMemo(
-    () =>
-      originOrder > 0 && destinationOrder > 0 && origin !== destination
-        ? originOrder < destinationOrder
-          ? forwardDirectionName(lineNo, stations.at(-1)?.station_name ?? "")
-          : reverseDirectionName(lineNo, stations[0]?.station_name ?? "")
-        : "",
-    [destinationOrder, lineNo, origin, originOrder, stations]
-  );
+    try {
+      return inferDirectionName(lineNo, directionStations, origin, destination);
+    } catch {
+      return "";
+    }
+  }, [destination, directionStations, lineNo, origin]);
   const canSubmit = Boolean(
     !lineLoading &&
       lineNo &&
@@ -325,7 +322,7 @@ function ResultView({
           <h2>앉을 가능성이 높은 위치</h2>
         </div>
         <span className="line-chip">
-          {recommendation.line_no}호선 {recommendation.direction} 방면
+          {recommendation.line_no}호선 {directionLabel(recommendation.line_no, recommendation.direction)}
         </span>
       </div>
 

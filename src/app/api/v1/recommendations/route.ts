@@ -1,8 +1,8 @@
 import { cachedJsonResponse, errorResponse, parseMode, parseOptionalDirection, requiredParam } from "@/lib/api";
-import { forwardDirectionName, reverseDirectionName } from "@/lib/directions";
+import { inferDirectionName } from "@/lib/directions";
 import { recommendSeatPositions } from "@/lib/recommendations";
 import { getSeatChanceRepository } from "@/lib/repository";
-import { RecommendationInputError, toDayType, toTimeSlot } from "@/lib/time";
+import { toDayType, toTimeSlot } from "@/lib/time";
 import { fallbackTrainLayout } from "@/lib/train-layout";
 import type { DirectionCode } from "@/lib/types";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     if (!direction) {
       const stations = await repository.getStations(lineNo);
-      direction = inferDirection(stations, lineNo, input.origin, input.destination);
+      direction = inferDirectionName(lineNo, stations, input.origin, input.destination);
     }
 
     const dayType = toDayType(datetime);
@@ -110,27 +110,5 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v7", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
-}
-
-function inferDirection(
-  stations: Array<{ stationName: string; sequenceNo: number }>,
-  lineNo: string,
-  origin: string,
-  destination: string
-) {
-  const originStation = stations.find((station) => station.stationName === origin);
-  const destinationStation = stations.find((station) => station.stationName === destination);
-
-  if (!originStation || !destinationStation) {
-    throw new RecommendationInputError("선택한 역이 해당 노선 데이터에 없습니다.");
-  }
-  if (originStation.sequenceNo === destinationStation.sequenceNo) {
-    throw new RecommendationInputError("승차역과 하차역은 서로 달라야 합니다.");
-  }
-
-  const sortedStations = [...stations].sort((left, right) => left.sequenceNo - right.sequenceNo);
-  return originStation.sequenceNo < destinationStation.sequenceNo
-    ? forwardDirectionName(lineNo, sortedStations.at(-1)?.stationName ?? "")
-    : reverseDirectionName(lineNo, sortedStations[0]?.stationName ?? "");
+  return ["seat-v8", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }

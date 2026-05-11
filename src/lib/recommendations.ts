@@ -1,4 +1,4 @@
-import { forwardDirectionName, reverseDirectionName } from "./directions";
+import { routeStationsForDirection } from "./directions";
 import { RecommendationInputError, toDayType, toTimeSlot } from "./time";
 import { fallbackTrainLayout } from "./train-layout";
 import type {
@@ -175,36 +175,8 @@ function findRouteStations(
   origin: string,
   destination: string
 ): Station[] {
-  const lineStations = stations
-    .filter((station) => station.lineNo === lineNo)
-    .sort((left, right) => left.sequenceNo - right.sequenceNo);
-  const originStation = lineStations.find((station) => station.stationName === origin);
-  const destinationStation = lineStations.find((station) => station.stationName === destination);
-
-  if (!originStation || !destinationStation) {
-    throw new RecommendationInputError("선택한 노선의 역 목록 내에 승차역/하차역이 없습니다.");
-  }
-
-  const forwardDirection = forwardDirectionName(lineNo, lineStations.at(-1)?.stationName ?? "");
-  const reverseDirection = reverseDirectionName(lineNo, lineStations[0]?.stationName ?? "");
-  const isForwardBound = direction === forwardDirection;
-  const isReverseBound = direction === reverseDirection;
-  const isValidDirection = isForwardBound
-    ? originStation.sequenceNo < destinationStation.sequenceNo
-    : isReverseBound && originStation.sequenceNo > destinationStation.sequenceNo;
-
-  if (!isValidDirection) {
-    throw new RecommendationInputError("선택한 방향과 승차역/하차역 순서가 맞지 않습니다.");
-  }
-
-  const [start, end] = [originStation.sequenceNo, destinationStation.sequenceNo].sort(
-    (left, right) => left - right
-  );
-  const route = lineStations.filter(
-    (station) => station.sequenceNo >= start && station.sequenceNo <= end
-  );
-
-  return isForwardBound ? route : route.reverse();
+  const lineStations = stations.filter((station) => station.lineNo === lineNo);
+  return routeStationsForDirection(lineNo, lineStations, direction, origin, destination);
 }
 
 function buildDoorCandidates(layout: TrainLayout): Candidate[] {
