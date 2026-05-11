@@ -555,7 +555,9 @@ async function ingestTrainLayout() {
 async function ingestCongestionProfiles() {
   const rows = await fetchConfiguredRows("CONGESTION");
   await client.query("delete from congestion_profile where line_no = $1", [targetLineNo]);
+  await client.query("delete from station_congestion_profile where line_no = $1", [targetLineNo]);
   const aggregated = new Map();
+  let stationCount = 0;
 
   for (const row of rows) {
     const lineNo = normalizeLineNo(pick(row, ["호선", "호선명", "LINE_NUM", "line_no"]));
@@ -563,6 +565,7 @@ async function ingestCongestionProfiles() {
       continue;
     }
 
+    const stationName = normalizeStationName(pick(row, ["역명", "역사명", "station_name", "STATION_NM"]));
     const direction = await normalizeDirection(pick(row, ["상하선구분", "상하구분", "방향", "direction", "DIRECTION"]));
     const dayType = normalizeDayType(pick(row, ["요일구분", "요일", "day_type", "DAY_TYPE"]));
     if (!direction || !dayType) {
@@ -581,6 +584,32 @@ async function ingestCongestionProfiles() {
       current.total += congestionPct;
       current.count += 1;
       aggregated.set(aggregateKey, current);
+
+      if (!stationName) {
+        continue;
+      }
+      await client.query(
+        `
+          insert into station_congestion_profile (
+            line_no, station_name, direction_code, day_type, time_slot, congestion_pct, source, observed_on
+          ) values ($1, $2, $3, $4, $5, $6, $7, current_date)
+          on conflict (line_no, station_name, direction_code, day_type, time_slot) do update set
+            congestion_pct = excluded.congestion_pct,
+            source = excluded.source,
+            observed_on = excluded.observed_on,
+            ingested_at = now()
+        `,
+        [
+          targetLineNo,
+          stationName,
+          direction,
+          dayType,
+          timeSlot,
+          congestionPct,
+          sourceUrl("CONGESTION") ?? "configured congestion source"
+        ]
+      );
+      stationCount += 1;
     }
   }
 
@@ -614,7 +643,7 @@ async function ingestCongestionProfiles() {
     return 0;
   }
 
-  return count;
+  return count + stationCount;
 }
 
 async function ingestWithLog(sourceName, sourceUrlValue, fn, options = {}) {

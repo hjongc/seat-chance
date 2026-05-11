@@ -27,6 +27,7 @@ interface Contribution {
   hint: DoorHint | null;
   stationDemand: number;
   transferDemand: number;
+  stationCongestionPct: number | null;
 }
 
 export function recommendSeatPositions(
@@ -91,6 +92,18 @@ export function recommendSeatPositions(
     usedTimeSlot
   )[0];
   const congestionPenalty = getCongestionPenalty(congestion);
+  const stationCongestionProfiles = nearestTimeSlotItems(
+    dataset.stationCongestionProfiles.filter(
+      (profile) =>
+        profile.lineNo === request.lineNo &&
+        profile.direction === request.direction &&
+        profile.dayType === dayType
+    ),
+    usedTimeSlot
+  );
+  const stationCongestionByStation = new Map(
+    stationCongestionProfiles.map((profile) => [profile.stationName, profile])
+  );
   const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
   const transferDemandByStation = new Map(
     dataset.transferDemandProfiles
@@ -114,6 +127,7 @@ export function recommendSeatPositions(
       profileByStation,
       maxAlightings,
       maxBoardings,
+      stationCongestionByStation,
       transferDemandByStation,
       maxTransferPassengers,
       doorHintsByStationAndCar
@@ -208,6 +222,7 @@ function scoreCandidate({
   profileByStation,
   maxAlightings,
   maxBoardings,
+  stationCongestionByStation,
   transferDemandByStation,
   maxTransferPassengers,
   doorHintsByStationAndCar
@@ -218,6 +233,7 @@ function scoreCandidate({
   profileByStation: Map<string, SeatChanceDataset["ridershipProfiles"][number]>;
   maxAlightings: number;
   maxBoardings: number;
+  stationCongestionByStation: Map<string, SeatChanceDataset["stationCongestionProfiles"][number]>;
   transferDemandByStation: Map<string, SeatChanceDataset["transferDemandProfiles"][number]>;
   maxTransferPassengers: number;
   doorHintsByStationAndCar: Map<string, DoorHint[]>;
@@ -240,6 +256,9 @@ function scoreCandidate({
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
     const transferDemand = transferProfile ? transferProfile.transferPassengers / maxTransferPassengers : 0;
+    const stationCongestion = stationCongestionByStation.get(station.stationName);
+    const stationCongestionPct = stationCongestion?.congestionPct ?? null;
+    const crowdingFactor = stationCongestionPct === null ? 1 : stationCrowdingFactor(stationCongestionPct);
     const matchingHint = (doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? []).reduce<{
       hint: DoorHint;
       distance: number;
@@ -261,12 +280,12 @@ function scoreCandidate({
         ? 1
         : 0.9
       : 0;
-    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight * crowdingFactor;
     const hintDemand = matchingHint?.hint.kind === "transfer"
       ? Math.max(stationDemand, transferDemand * 0.85)
       : stationDemand;
     const hintBonus = matchingHint
-      ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor
+      ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor * crowdingFactor
       : 0;
     const hintBoost = matchingHint
       ? (matchingHint.hint.kind === "transfer" ? 1.25 : 0.75)
@@ -282,7 +301,8 @@ function scoreCandidate({
         score: contributionScore,
         hint: matchingHint ? matchingHint.hint : null,
         stationDemand,
-        transferDemand
+        transferDemand,
+        stationCongestionPct
       });
     }
   }
@@ -365,6 +385,10 @@ function getCongestionPenalty(profile: CongestionProfile | undefined): number {
   return clamp((profile.congestionPct - 115) * 0.18, 0, 14);
 }
 
+function stationCrowdingFactor(congestionPct: number): number {
+  return clamp(1.08 - Math.max(congestionPct - 70, 0) * 0.003, 0.62, 1.08);
+}
+
 function toGrade(score: number) {
   if (score >= 78) {
     return "HIGH";
@@ -415,6 +439,14 @@ function toReasons(contributions: Contribution[]): string[] {
 
   if (primary && primary.stationDemand > 0.2) {
     reasons.push(`${primary.stationName}은(는) 하차 수요 대비 승차 수요가 낮아 좌석각에 유리합니다.`);
+  }
+
+  if (primary?.stationCongestionPct !== null && primary?.stationCongestionPct !== undefined) {
+    if (primary.stationCongestionPct >= 160) {
+      reasons.push(`${primary.stationName} 구간 혼잡도가 높아 좌석 경쟁을 감점했습니다.`);
+    } else if (primary.stationCongestionPct <= 90) {
+      reasons.push(`${primary.stationName} 구간 혼잡도가 상대적으로 낮습니다.`);
+    }
   }
 
   if (secondary?.hint?.kind === "transfer") {

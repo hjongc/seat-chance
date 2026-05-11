@@ -45,6 +45,16 @@ export interface CongestionProfile {
   source: string;
 }
 
+export interface StationCongestionProfile {
+  lineNo: string;
+  stationName: string;
+  direction: DirectionCode;
+  dayType: DayType;
+  timeSlot: string;
+  congestionPct: number;
+  source: string;
+}
+
 export interface TransferDemandProfile {
   lineNo: string;
   stationName: string;
@@ -72,6 +82,7 @@ export interface SeatChanceDataset {
   trainLayouts: TrainLayout[];
   ridershipProfiles: RidershipProfile[];
   congestionProfiles: CongestionProfile[];
+  stationCongestionProfiles: StationCongestionProfile[];
   transferDemandProfiles: TransferDemandProfile[];
   doorHints: DoorHint[];
 }
