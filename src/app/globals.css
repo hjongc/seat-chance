@@ -408,7 +408,7 @@ select {
 .train-scroll {
   display: grid;
   gap: 8px;
-  grid-auto-columns: 88px;
+  grid-auto-columns: 96px;
   grid-auto-flow: column;
   overflow-x: auto;
   padding-bottom: 8px;
@@ -435,6 +435,7 @@ select {
 .door-row {
   display: grid;
   gap: 6px;
+  grid-template-columns: 1fr;
 }
 
 .door-cell {
@@ -444,7 +445,7 @@ select {
   border-radius: 6px;
   display: grid;
   gap: 2px;
-  min-height: 48px;
+  min-height: 42px;
   padding: 5px;
   place-items: center;
 }
@@ -452,12 +453,16 @@ select {
 .door-cell span {
   font-size: 12px;
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .door-cell strong {
   color: var(--green);
   font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .door-highlight {
