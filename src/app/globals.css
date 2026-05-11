@@ -137,6 +137,34 @@ select {
   width: 100%;
 }
 
+.segmented-control {
+  background: #eef2f4;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 48px;
+  padding: 4px;
+}
+
+.segment-option {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.segment-option-active {
+  background: var(--surface);
+  box-shadow: 0 1px 5px rgba(26, 33, 42, 0.12);
+  color: var(--text);
+}
+
 .combo-box {
   position: relative;
 }
@@ -275,6 +303,7 @@ select {
 .result-heading {
   align-items: start;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: space-between;
 }
@@ -296,10 +325,12 @@ select {
   border: 1px solid #ffd2ad;
   border-radius: 999px;
   color: var(--accent-strong);
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.3;
   padding: 7px 9px;
+  text-align: right;
 }
 
 .recommendation-list {
@@ -495,7 +526,7 @@ select {
   }
 
   .split-fields {
-    grid-template-columns: 1.35fr 0.65fr;
+    grid-template-columns: 1.25fr 0.75fr;
   }
 
   .search-panel,

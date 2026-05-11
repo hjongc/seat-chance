@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  CalendarDays,
   Clock3,
   MapPin,
   Search,
@@ -31,6 +32,7 @@ interface RecommendationResponse {
   destination: string;
   line_no: string;
   direction: string;
+  day_type: DayType;
   time_slot: string;
   recommendations: Recommendation[];
   cautions: string[];
@@ -62,13 +64,21 @@ interface ComboOption {
   label: string;
 }
 
+type DayType = "WEEKDAY" | "WEEKEND";
+
+const dayTypeOptions: Array<{ value: DayType; label: string }> = [
+  { value: "WEEKDAY", label: "평일" },
+  { value: "WEEKEND", label: "주말·공휴일" }
+];
+
 export function HomeClient() {
   const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
   const [lineNo, setLineNo] = useState("");
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [datetime, setDatetime] = useState(defaultDatetime());
+  const [dayType, setDayType] = useState<DayType>("WEEKDAY");
+  const [timeSlot, setTimeSlot] = useState(defaultTimeSlot());
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [layout, setLayout] = useState<TrainLayoutResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -133,7 +143,8 @@ export function HomeClient() {
       lineNo &&
       origin &&
       destination &&
-      datetime &&
+      dayType &&
+      timeSlot &&
       direction &&
       !loading &&
       !stationLoading
@@ -187,7 +198,8 @@ export function HomeClient() {
         destination,
         line_no: lineNo,
         direction,
-        datetime: toApiDatetime(datetime),
+        day_type: dayType,
+        time_slot: timeSlot,
         mode: "seat"
       });
       const recommendationResponse = await fetch(`/api/v1/recommendations?${query.toString()}`);
@@ -267,17 +279,35 @@ export function HomeClient() {
         <div className="split-fields">
           <label className="field">
             <span>
+              <CalendarDays size={16} aria-hidden="true" />
+              요일 유형
+            </span>
+            <div className="segmented-control" role="group" aria-label="요일 유형">
+              {dayTypeOptions.map((option) => (
+                <button
+                  className={dayType === option.value ? "segment-option segment-option-active" : "segment-option"}
+                  key={option.value}
+                  onClick={() => setDayType(option.value)}
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </label>
+
+          <label className="field">
+            <span>
               <Clock3 size={16} aria-hidden="true" />
               출발 시간
             </span>
             <input
-              type="datetime-local"
+              type="time"
               step="1800"
-              value={datetime}
-              onChange={(event) => setDatetime(event.target.value)}
+              value={timeSlot}
+              onChange={(event) => setTimeSlot(event.target.value)}
             />
           </label>
-
         </div>
 
         <button className="primary-action" type="submit" disabled={!canSubmit}>
@@ -322,7 +352,8 @@ function ResultView({
           <h2>앉을 가능성이 높은 위치</h2>
         </div>
         <span className="line-chip">
-          {recommendation.line_no}호선 {directionLabel(recommendation.line_no, recommendation.direction)}
+          {recommendation.line_no}호선 {directionLabel(recommendation.line_no, recommendation.direction)} ·{" "}
+          {formatDayType(recommendation.day_type)} {recommendation.time_slot}
         </span>
       </div>
 
@@ -545,14 +576,12 @@ function chosung(value: string) {
     .join("");
 }
 
-function defaultDatetime() {
+function defaultTimeSlot() {
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
   kstNow.setUTCMinutes(Math.ceil((kstNow.getUTCMinutes() + 5) / 30) * 30, 0, 0);
-  return `${kstNow.getUTCFullYear()}-${String(kstNow.getUTCMonth() + 1).padStart(2, "0")}-${String(
-    kstNow.getUTCDate()
-  ).padStart(2, "0")}T${String(kstNow.getUTCHours()).padStart(2, "0")}:${String(kstNow.getUTCMinutes()).padStart(2, "0")}`;
+  return `${String(kstNow.getUTCHours()).padStart(2, "0")}:${String(kstNow.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-function toApiDatetime(value: string) {
-  return value.length === 16 ? `${value}:00+09:00` : `${value}+09:00`;
+function formatDayType(dayType: DayType) {
+  return dayType === "WEEKDAY" ? "평일" : "주말·공휴일";
 }

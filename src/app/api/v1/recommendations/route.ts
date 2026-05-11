@@ -1,4 +1,12 @@
-import { cachedJsonResponse, errorResponse, parseMode, parseOptionalDirection, requiredParam } from "@/lib/api";
+import {
+  cachedJsonResponse,
+  errorResponse,
+  parseDayType,
+  parseMode,
+  parseOptionalDirection,
+  parseTimeSlot,
+  requiredParam
+} from "@/lib/api";
 import { inferDirectionName } from "@/lib/directions";
 import { recommendSeatPositions } from "@/lib/recommendations";
 import { getSeatChanceRepository } from "@/lib/repository";
@@ -12,12 +20,13 @@ export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams;
     const lineNo = requiredParam(params, "line_no");
-    const datetime = requiredParam(params, "datetime");
+    const { dayType, timeSlot } = parseRecommendationTimeInput(params);
     const input = {
       origin: requiredParam(params, "origin"),
       destination: requiredParam(params, "destination"),
       lineNo,
-      datetime,
+      dayType,
+      timeSlot,
       mode: parseMode(params.get("mode"))
     };
     const parsedDirection = parseOptionalDirection(params.get("direction"));
@@ -29,8 +38,6 @@ export async function GET(request: Request) {
       direction = inferDirectionName(lineNo, stations, input.origin, input.destination);
     }
 
-    const dayType = toDayType(datetime);
-    const timeSlot = toTimeSlot(datetime);
     const cacheKey = recommendationCacheKey({
       origin: input.origin,
       destination: input.destination,
@@ -95,6 +102,22 @@ function recommendationCacheTtlSeconds() {
   return Number.isFinite(ttl) && ttl > 0 ? ttl : 86400;
 }
 
+function parseRecommendationTimeInput(params: URLSearchParams) {
+  const hasExplicitTimeInput = params.has("day_type") || params.has("time_slot");
+  if (hasExplicitTimeInput) {
+    return {
+      dayType: parseDayType(params.get("day_type")),
+      timeSlot: parseTimeSlot(params.get("time_slot"))
+    };
+  }
+
+  const datetime = requiredParam(params, "datetime");
+  return {
+    dayType: toDayType(datetime),
+    timeSlot: toTimeSlot(datetime)
+  };
+}
+
 function recommendationCacheKey({
   origin,
   destination,
@@ -110,5 +133,5 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v8", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
+  return ["seat-v9", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }

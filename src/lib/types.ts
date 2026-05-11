@@ -92,7 +92,8 @@ export interface RecommendationRequest {
   destination: string;
   lineNo: string;
   direction: DirectionCode;
-  datetime: string;
+  dayType: DayType;
+  timeSlot: string;
   mode: RecommendationMode;
 }
 
@@ -111,6 +112,7 @@ export interface RecommendationResponse {
   destination: string;
   line_no: string;
   direction: DirectionCode;
+  day_type: DayType;
   time_slot: string;
   recommendations: Recommendation[];
   cautions: string[];

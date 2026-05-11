@@ -1,5 +1,5 @@
 import { routeStationsForDirection } from "./directions";
-import { RecommendationInputError, toDayType, toTimeSlot } from "./time";
+import { RecommendationInputError } from "./time";
 import { fallbackTrainLayout } from "./train-layout";
 import type {
   CongestionProfile,
@@ -38,8 +38,8 @@ export function recommendSeatPositions(
     throw new RecommendationInputError("mode는 seat만 지원합니다.");
   }
 
-  const timeSlot = toTimeSlot(request.datetime);
-  const dayType = toDayType(request.datetime);
+  const timeSlot = request.timeSlot;
+  const dayType = request.dayType;
   const layout = findTrainLayout(dataset.trainLayouts, request.lineNo, request.direction);
   const routeStations = findRouteStations(
     dataset.stations,
@@ -68,6 +68,7 @@ export function recommendSeatPositions(
       destination: request.destination,
       line_no: request.lineNo,
       direction: request.direction,
+      day_type: dayType,
       time_slot: usedTimeSlot,
       recommendations: toDataShortageRecommendations(
         layout,
@@ -147,6 +148,7 @@ export function recommendSeatPositions(
     destination: request.destination,
     line_no: request.lineNo,
     direction: request.direction,
+    day_type: dayType,
     time_slot: usedTimeSlot,
     recommendations,
     cautions: [
