@@ -7,7 +7,7 @@ import {
   Search,
   TrainFront
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
 import { directionLabel, inferDirectionName } from "@/lib/directions";
 
 interface StationOption {
@@ -211,60 +211,126 @@ export function HomeClient() {
 
   return (
     <main className="app-shell">
-      <section className="topbar" aria-label="서비스 요약">
-        <div className="brand-mark">
-          <TrainFront size={22} aria-hidden="true" />
+      <header className="topbar" aria-label="서비스 요약">
+        <a className="brand-lockup" href="#seat-search" aria-label="앉을각 검색으로 이동">
+          <span className="brand-mark">
+            <TrainFront size={22} aria-hidden="true" />
+          </span>
+          <span>
+            <strong>앉을각</strong>
+            <span>Seat Chance</span>
+          </span>
+        </a>
+        <a className="topbar-cta" href="#seat-search">
+          추천 시작
+        </a>
+      </header>
+
+      <section className="landing-hero" aria-labelledby="landing-title">
+        <div className="hero-copy">
+          <p className="hero-eyebrow">Seoul Metro Seat Planner</p>
+          <h1 id="landing-title">앉을각</h1>
+          <p className="hero-lede">
+            승차역, 하차역, 출발 시간을 바탕으로 어느 칸의 어느 문 앞에 서야 할지 바로 정합니다.
+          </p>
+          <div className="hero-actions" role="group" aria-label="주요 동작">
+            <a className="hero-primary" href="#seat-search">
+              <Search size={18} aria-hidden="true" />
+              좌석각 찾기
+            </a>
+            <span className="hero-secondary">칸·문 단위 추천</span>
+          </div>
+          <dl className="hero-metrics" aria-label="서비스 범위">
+            <div>
+              <dt>지원 노선</dt>
+              <dd>{lineLoading ? "확인 중" : `${lineOptions.length}개`}</dd>
+            </div>
+            <div>
+              <dt>추천 단위</dt>
+              <dd>칸·문</dd>
+            </div>
+            <div>
+              <dt>출발 기준</dt>
+              <dd>30분</dd>
+            </div>
+          </dl>
         </div>
-        <div>
-          <h1>앉을각</h1>
-          <p>호선별 좌석각 위치 추천</p>
+
+        <div className="hero-visual" aria-hidden="true">
+          <div className="visual-route">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="visual-card">
+            <span>추천 1순위</span>
+            <strong>3-2 문</strong>
+            <p>하차 수요와 환승 흐름이 만나는 구간</p>
+          </div>
+          <div className="visual-train">
+            {["2-1", "2-2", "3-1", "3-2", "4-1", "4-2"].map((door) => (
+              <span className={door === "3-2" ? "visual-door visual-door-active" : "visual-door"} key={door}>
+                {door}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
-      <form className="search-panel" onSubmit={handleSubmit}>
-        <label className="field">
-          <span>
-            <TrainFront size={16} aria-hidden="true" />
-            호선
+      <form className="search-panel" id="seat-search" onSubmit={handleSubmit}>
+        <div className="search-panel-header">
+          <div>
+            <p className="section-eyebrow">추천 조건</p>
+            <h2>출발 전에 위치를 정하세요</h2>
+          </div>
+          <span className="search-status">
+            {direction ? `${lineNo}호선 ${directionLabel(lineNo, direction)}` : "경로 입력"}
           </span>
-          <ComboBox
-            placeholder="호선 선택 또는 검색"
-            value={lineNo}
-            options={lineComboOptions}
-            onChange={handleLineChange}
-            disabled={lineLoading}
-          />
-        </label>
+        </div>
 
-        <label className="field">
-          <span>
-            <MapPin size={16} aria-hidden="true" />
-            승차역
-          </span>
-          <ComboBox
-            placeholder="승차역 선택 또는 검색"
-            value={origin}
-            options={stationComboOptions}
-            onChange={setOrigin}
-            disabled={!lineNo || stationLoading || stations.length === 0}
-          />
-        </label>
+        <div className="search-grid">
+          <label className="field">
+            <span>
+              <TrainFront size={16} aria-hidden="true" />
+              호선
+            </span>
+            <ComboBox
+              placeholder="호선 선택 또는 검색"
+              value={lineNo}
+              options={lineComboOptions}
+              onChange={handleLineChange}
+              disabled={lineLoading}
+            />
+          </label>
 
-        <label className="field">
-          <span>
-            <MapPin size={16} aria-hidden="true" />
-            하차역
-          </span>
-          <ComboBox
-            placeholder="하차역 선택 또는 검색"
-            value={destination}
-            options={stationComboOptions}
-            onChange={setDestination}
-            disabled={!lineNo || stationLoading || stations.length === 0}
-          />
-        </label>
+          <label className="field">
+            <span>
+              <MapPin size={16} aria-hidden="true" />
+              승차역
+            </span>
+            <ComboBox
+              placeholder="승차역 선택 또는 검색"
+              value={origin}
+              options={stationComboOptions}
+              onChange={setOrigin}
+              disabled={!lineNo || stationLoading || stations.length === 0}
+            />
+          </label>
 
-        <div className="split-fields">
+          <label className="field">
+            <span>
+              <MapPin size={16} aria-hidden="true" />
+              하차역
+            </span>
+            <ComboBox
+              placeholder="하차역 선택 또는 검색"
+              value={destination}
+              options={stationComboOptions}
+              onChange={setDestination}
+              disabled={!lineNo || stationLoading || stations.length === 0}
+            />
+          </label>
+
           <label className="field">
             <span>
               <Clock3 size={16} aria-hidden="true" />
@@ -277,12 +343,11 @@ export function HomeClient() {
               onChange={(event) => setDatetime(event.target.value)}
             />
           </label>
-
         </div>
 
         <button className="primary-action" type="submit" disabled={!canSubmit}>
           <Search size={18} aria-hidden="true" />
-          {loading ? "계산 중" : "추천 보기"}
+          {loading ? "계산 중" : "좌석각 추천 받기"}
         </button>
       </form>
 
@@ -424,17 +489,25 @@ function ComboBox({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const inputId = useId();
+  const listboxId = `${inputId}-listbox`;
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? "";
   const filteredOptions = useMemo(() => {
     const matches = options.filter((option) => matchesSearch(option.label, query) || matchesSearch(option.value, query));
     return matches.slice(0, 24);
   }, [options, query]);
+  const activeOption = filteredOptions[activeIndex];
 
   useEffect(() => {
     setQuery(selectedLabel);
   }, [selectedLabel]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, options]);
 
   function handleQueryChange(nextQuery: string) {
     setQuery(nextQuery);
@@ -450,28 +523,70 @@ function ComboBox({
     onChange(option.value);
   }
 
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex((index) => Math.min(index + 1, Math.max(filteredOptions.length - 1, 0)));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+      setActiveIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && open && activeOption) {
+      event.preventDefault();
+      selectOption(activeOption);
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setOpen(false);
+    }
+  }
+
   return (
     <div className="combo-box">
       <input
+        aria-activedescendant={open && activeOption ? optionId(inputId, activeOption.value) : undefined}
+        aria-autocomplete="list"
+        aria-controls={open ? listboxId : undefined}
+        aria-expanded={open && !disabled}
+        aria-haspopup="listbox"
         autoComplete="off"
         disabled={disabled}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         onChange={(event) => handleQueryChange(event.target.value)}
         onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         role="combobox"
         value={query}
       />
       {open && !disabled ? (
-        <div className="combo-menu" role="listbox">
+        <div className="combo-menu" id={listboxId} role="listbox">
           {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
+            filteredOptions.map((option, index) => (
               <button
-                className={option.value === value ? "combo-option combo-option-selected" : "combo-option"}
+                aria-selected={option.value === value}
+                className={[
+                  "combo-option",
+                  option.value === value ? "combo-option-selected" : "",
+                  index === activeIndex ? "combo-option-active" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                id={optionId(inputId, option.value)}
                 key={option.value}
                 onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => selectOption(option)}
                 role="option"
+                tabIndex={-1}
                 type="button"
               >
                 {option.label}
@@ -484,6 +599,10 @@ function ComboBox({
       ) : null}
     </div>
   );
+}
+
+function optionId(inputId: string, value: string) {
+  return `${inputId}-option-${value.replace(/\s+/g, "-")}`;
 }
 
 function sortLines(lines: LineOption[]) {
