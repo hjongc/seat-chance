@@ -62,6 +62,7 @@ try {
     try {
       await ingestWithLog("서울 열린데이터광장 SearchSTNBySubwayLineInfo", null, ingestStationOrder);
       await ingestWithLog("서울 열린데이터광장 CardSubwayTime", null, ingestRidershipProfiles);
+      await ingestWithLog("서울교통공사 환승역 환승인원정보", sourceUrl("TRANSFER_DEMAND"), ingestTransferDemandProfiles, { optional: true });
       await ingestWithLog("서울교통공사 도시철도 환승정보", sourceUrl("TRANSFER"), ingestTransferDoors, { optional: true });
       await ingestWithLog("서울교통공사 빠른하차정보", sourceUrl("FAST_EXIT"), ingestFastExitDoors, { optional: true });
       await ingestWithLog("서울교통공사 열차운행현황", sourceUrl("TRAIN_OPERATION"), ingestTrainLayout, { optional: true });
@@ -288,6 +289,74 @@ async function fetchRidershipRows() {
   }
 
   return null;
+}
+
+async function ingestTransferDemandProfiles() {
+  const rows = await fetchConfiguredRows("TRANSFER_DEMAND");
+  const targetStationNames = await getTargetLineStationNames();
+  const observedOn = transferDemandObservedOn();
+  const source = sourceUrl("TRANSFER_DEMAND") ?? "configured transfer-demand source";
+  await client.query("delete from transfer_demand_profile where line_no = $1 and observed_on = $2", [
+    targetLineNo,
+    observedOn
+  ]);
+  let count = 0;
+
+  for (const row of rows) {
+    const stationName = normalizeStationName(
+      pick(row, ["역명", "출발역명", "환승역사 역명", "환승역사", "station_name", "STATION_NM", "stationName"])
+    );
+    if (!stationName || !targetStationNames.has(stationName)) {
+      continue;
+    }
+
+    const weekdayPassengers = intValue(
+      pick(row, [
+        "평일 일평균 환승인원",
+        "평일(일평균)",
+        "평일일평균",
+        "평일",
+        "weekday",
+        "WEEKDAY"
+      ])
+    );
+    const saturdayPassengers = intValue(
+      pick(row, ["토요일 환승인원", "토요일", "saturday", "SATURDAY", "SAT"])
+    );
+    const sundayPassengers = intValue(
+      pick(row, ["일요일 환승인원", "일요일", "sunday", "SUNDAY", "SUN"])
+    );
+    const weekendPassengers = averagePositive([saturdayPassengers, sundayPassengers]);
+
+    for (const [dayType, passengers] of [
+      ["WEEKDAY", weekdayPassengers],
+      ["WEEKEND", weekendPassengers]
+    ]) {
+      if (passengers <= 0) {
+        continue;
+      }
+
+      await client.query(
+        `
+          insert into transfer_demand_profile (
+            line_no, station_name, day_type, transfer_passengers, source, observed_on
+          ) values ($1, $2, $3, $4, $5, $6)
+          on conflict (line_no, station_name, day_type, observed_on) do update set
+            transfer_passengers = excluded.transfer_passengers,
+            source = excluded.source,
+            ingested_at = now()
+        `,
+        [targetLineNo, stationName, dayType, passengers, source, observedOn]
+      );
+      count += 1;
+    }
+  }
+
+  if (count === 0) {
+    console.warn(`No transfer-demand rows were ingested for line ${targetLineNo}.`);
+  }
+
+  return count;
 }
 
 async function ingestTransferDoors() {
@@ -1086,6 +1155,11 @@ async function getStationSequenceByName() {
   return stationSequenceByName;
 }
 
+async function getTargetLineStationNames() {
+  const stationSequences = await getStationSequenceByName();
+  return new Set(stationSequences.keys());
+}
+
 function parseDoorPosition(value) {
   const text = stringValue(value);
   if (!text) {
@@ -1121,6 +1195,32 @@ function candidateMonths(baseMonth, count) {
   }
 
   return candidates;
+}
+
+function averagePositive(values) {
+  const positiveValues = values.filter((value) => value > 0);
+  if (positiveValues.length === 0) {
+    return 0;
+  }
+  return Math.round(positiveValues.reduce((sum, value) => sum + value, 0) / positiveValues.length);
+}
+
+function transferDemandObservedOn() {
+  const configured = stringValue(process.env.TRANSFER_DEMAND_OBSERVED_ON);
+  if (configured) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(configured)) {
+      throw new Error("TRANSFER_DEMAND_OBSERVED_ON must be YYYY-MM-DD.");
+    }
+    return configured;
+  }
+
+  const source = sourceUrl("TRANSFER_DEMAND") ?? "";
+  const match = source.match(/(20\d{2})(\d{2})(\d{2})/);
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  return new Date().toISOString().slice(0, 10);
 }
 
 function intValue(value) {

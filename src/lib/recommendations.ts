@@ -26,6 +26,7 @@ interface Contribution {
   score: number;
   hint: DoorHint | null;
   stationDemand: number;
+  transferDemand: number;
 }
 
 export function recommendSeatPositions(
@@ -91,6 +92,15 @@ export function recommendSeatPositions(
   )[0];
   const congestionPenalty = getCongestionPenalty(congestion);
   const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
+  const transferDemandByStation = new Map(
+    dataset.transferDemandProfiles
+      .filter((profile) => profile.lineNo === request.lineNo && profile.dayType === dayType)
+      .map((profile) => [profile.stationName, profile])
+  );
+  const maxTransferPassengers = Math.max(
+    1,
+    ...Array.from(transferDemandByStation.values()).map((profile) => profile.transferPassengers)
+  );
   const doorHintsByStationAndCar = indexDoorHints(
     dataset.doorHints.filter(
       (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
@@ -104,6 +114,8 @@ export function recommendSeatPositions(
       profileByStation,
       maxAlightings,
       maxBoardings,
+      transferDemandByStation,
+      maxTransferPassengers,
       doorHintsByStationAndCar
     })
   );
@@ -196,6 +208,8 @@ function scoreCandidate({
   profileByStation,
   maxAlightings,
   maxBoardings,
+  transferDemandByStation,
+  maxTransferPassengers,
   doorHintsByStationAndCar
 }: {
   candidate: Candidate;
@@ -204,13 +218,16 @@ function scoreCandidate({
   profileByStation: Map<string, SeatChanceDataset["ridershipProfiles"][number]>;
   maxAlightings: number;
   maxBoardings: number;
+  transferDemandByStation: Map<string, SeatChanceDataset["transferDemandProfiles"][number]>;
+  maxTransferPassengers: number;
   doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
 
   for (const [index, station] of intermediateStations.entries()) {
     const profile = profileByStation.get(station.stationName);
-    if (!profile) {
+    const transferProfile = transferDemandByStation.get(station.stationName);
+    if (!profile && !transferProfile) {
       continue;
     }
 
@@ -219,9 +236,10 @@ function scoreCandidate({
     const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
     const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
     const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
-    const alightingScore = profile.alightings / maxAlightings;
-    const boardingScore = profile.boardings / maxBoardings;
+    const alightingScore = profile ? profile.alightings / maxAlightings : 0;
+    const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
+    const transferDemand = transferProfile ? transferProfile.transferPassengers / maxTransferPassengers : 0;
     const matchingHint = (doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? []).reduce<{
       hint: DoorHint;
       distance: number;
@@ -243,9 +261,12 @@ function scoreCandidate({
         ? 1
         : 0.9
       : 0;
-    const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight;
+    const hintDemand = matchingHint?.hint.kind === "transfer"
+      ? Math.max(stationDemand, transferDemand * 0.85)
+      : stationDemand;
     const hintBonus = matchingHint
-      ? stationDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor
+      ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor
       : 0;
     const hintBoost = matchingHint
       ? (matchingHint.hint.kind === "transfer" ? 1.25 : 0.75)
@@ -260,7 +281,8 @@ function scoreCandidate({
         remainingStops: intermediateStations.length - index,
         score: contributionScore,
         hint: matchingHint ? matchingHint.hint : null,
-        stationDemand
+        stationDemand,
+        transferDemand
       });
     }
   }
@@ -385,6 +407,10 @@ function toReasons(contributions: Contribution[]): string[] {
     reasons.push(`${primary.stationName} 출구·계단 동선과 가깝습니다.`);
   } else if (primary) {
     reasons.push(`${primary.stationName} 하차 수요가 높은 구간입니다.`);
+  }
+
+  if (primary && primary.transferDemand > 0.2) {
+    reasons.push(`${primary.stationName}은(는) 환승인원 데이터상 환승 수요가 큰 역입니다.`);
   }
 
   if (primary && primary.stationDemand > 0.2) {
