@@ -25,6 +25,7 @@ interface Contribution {
   remainingStops: number;
   score: number;
   hint: DoorHint | null;
+  hintDistance: number | null;
   stationDemand: number;
   transferDemand: number;
   stationCongestionPct: number | null;
@@ -302,6 +303,7 @@ function scoreCandidate({
         remainingStops: intermediateStations.length - index,
         score: contributionScore,
         hint: matchingHint ? matchingHint.hint : null,
+        hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
         transferDemand,
         stationCongestionPct
@@ -362,7 +364,7 @@ function toRecommendation(
     score,
     grade: toGrade(score),
     expected_seat_window: toExpectedSeatWindow(sortedContributions),
-    reasons: toReasons(sortedContributions)
+    reasons: toReasons(sortedContributions, candidate)
   };
 }
 
@@ -420,19 +422,15 @@ function toExpectedSeatWindow(contributions: Contribution[]): string {
   return fallback ? fallback.stationName : "중간역";
 }
 
-function toReasons(contributions: Contribution[]): string[] {
+function toReasons(contributions: Contribution[], candidate: Candidate): string[] {
   const reasons: string[] = [];
   const primary = contributions.find((contribution) => contribution.hint) ?? contributions[0];
   const secondary = contributions.find(
     (contribution) => contribution.hint && contribution.stationName !== primary?.stationName
   );
 
-  if (primary?.hint?.kind === "transfer") {
-    reasons.push(`${primary.stationName} 하차/환승 수요가 높습니다.`);
-  } else if (primary?.hint?.kind === "facility") {
-    reasons.push(`${primary.stationName} 출구·계단 동선과 가깝습니다.`);
-  } else if (primary) {
-    reasons.push(`${primary.stationName} 하차 수요가 높은 구간입니다.`);
+  if (primary) {
+    reasons.push(toPrimaryReason(primary, candidate));
   }
 
   if (primary && primary.transferDemand > 0.2) {
@@ -451,10 +449,8 @@ function toReasons(contributions: Contribution[]): string[] {
     }
   }
 
-  if (secondary?.hint?.kind === "transfer") {
-    reasons.push(`${secondary.stationName} 환승 동선과도 가까운 위치입니다.`);
-  } else if (secondary?.hint?.kind === "facility") {
-    reasons.push(`${secondary.stationName} 빠른하차 동선과도 가깝습니다.`);
+  if (secondary) {
+    reasons.push(toSecondaryReason(secondary, candidate));
   }
 
   if (primary && primary.remainingStops >= 3) {
@@ -464,6 +460,49 @@ function toReasons(contributions: Contribution[]): string[] {
   }
 
   return reasons;
+}
+
+function toPrimaryReason(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint) {
+    return `${contribution.stationName} 하차 수요가 높은 구간을 기준으로 ${formatDoor(candidate)}을 추천했습니다.`;
+  }
+
+  const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "출구·계단";
+  const demandLabel = contribution.hint.kind === "transfer" ? "하차/환승 수요" : "하차 수요";
+  const relation = toHintRelation(contribution, candidate);
+
+  return `${contribution.stationName} ${hintLabel} 동선${relation} ${demandLabel}를 먼저 받을 수 있습니다.`;
+}
+
+function toSecondaryReason(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint) {
+    return `${contribution.stationName} 하차 수요도 보조로 반영했습니다.`;
+  }
+
+  const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "빠른하차";
+  const relation = toHintRelation(contribution, candidate);
+
+  return `${contribution.stationName} ${hintLabel} 동선${relation} 보조 기회로 반영했습니다.`;
+}
+
+function toHintRelation(contribution: Contribution, candidate: Candidate): string {
+  if (!contribution.hint || contribution.hintDistance === null) {
+    return "";
+  }
+
+  if (contribution.hint.carNo !== candidate.carNo) {
+    return `(${formatDoor(contribution.hint)} 기준)과 같은 칸은 아니지만`;
+  }
+
+  if (contribution.hintDistance === 0) {
+    return `과 ${formatDoor(candidate)}이 직접 맞아`;
+  }
+
+  return `(${formatDoor(contribution.hint)} 기준)에서 한 문 거리라`;
+}
+
+function formatDoor(position: { carNo: number; doorNo: number }): string {
+  return `${position.carNo}-${position.doorNo} 문`;
 }
 
 function roundToTenth(value: number): number {
