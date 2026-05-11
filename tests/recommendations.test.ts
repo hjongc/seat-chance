@@ -198,3 +198,67 @@ test("rejects reverse route when direction does not match station order", () => 
     /방향/
   );
 });
+
+test("supports line 2 circular routes across the sequence boundary", () => {
+  const lineTwoDataset: SeatChanceDataset = {
+    stations: ["시청", "을지로입구", "을지로3가", "신당", "충정로"].map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "2",
+      stationCode: `L2-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "2",
+        branchCode: "MAIN",
+        direction: "내선",
+        carCount: 1,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      {
+        lineNo: "2",
+        stationName: "시청",
+        dayType: "WEEKDAY",
+        timeSlot: "08:00",
+        boardings: 200,
+        alightings: 1200,
+        source: "test fixture",
+        observedMonth: "2026-05-01"
+      }
+    ],
+    congestionProfiles: [
+      {
+        lineNo: "2",
+        direction: "내선",
+        dayType: "WEEKDAY",
+        timeSlot: "08:00",
+        congestionPct: 120,
+        source: "test fixture"
+      }
+    ],
+    doorHints: []
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "충정로",
+      destination: "을지로입구",
+      lineNo: "2",
+      direction: "내선",
+      datetime: "2026-05-07T08:00:00+09:00",
+      mode: "seat"
+    },
+    lineTwoDataset
+  );
+
+  assert.equal(result.direction, "내선");
+  assert.equal(result.recommendations.length, 3);
+});

@@ -1095,10 +1095,27 @@ async function inferDirectionFromStationText(stationName, directionText) {
     if (candidateName === stationName || !text.includes(candidateName)) {
       continue;
     }
-    return candidateSequence > currentSequence ? await defaultDirection("DOWN") : await defaultDirection("UP");
+    return await inferDirectionFromSequences(currentSequence, candidateSequence, stationSequences.size);
   }
 
   return "";
+}
+
+async function inferDirectionFromSequences(currentSequence, candidateSequence, stationCount) {
+  if (currentSequence === candidateSequence) {
+    return "";
+  }
+  if (targetLineNo !== "2") {
+    return candidateSequence > currentSequence ? await defaultDirection("DOWN") : await defaultDirection("UP");
+  }
+
+  const forwardStops = (candidateSequence - currentSequence + stationCount) % stationCount;
+  const reverseStops = (currentSequence - candidateSequence + stationCount) % stationCount;
+  if (forwardStops === reverseStops) {
+    return "";
+  }
+
+  return forwardStops < reverseStops ? await defaultDirection("DOWN") : await defaultDirection("UP");
 }
 
 async function getStationSequenceByName() {
