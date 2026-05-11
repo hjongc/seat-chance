@@ -9,7 +9,9 @@ import {
   TrainFront
 } from "lucide-react";
 import { FormEvent, KeyboardEvent, useEffect, useId, useMemo, useState } from "react";
+import { currentKoreaDayType } from "@/lib/day-type";
 import { directionLabel, inferDirectionName } from "@/lib/directions";
+import type { DayType } from "@/lib/types";
 
 interface StationOption {
   station_code: string;
@@ -70,8 +72,6 @@ interface ScoredStationOption {
   sequenceNo: number;
 }
 
-type DayType = "WEEKDAY" | "WEEKEND";
-
 const featuredStationNames = new Set([
   "가락시장",
   "강남",
@@ -122,7 +122,7 @@ export function HomeClient() {
   const [stations, setStations] = useState<StationOption[]>([]);
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
-  const [dayType, setDayType] = useState<DayType>("WEEKDAY");
+  const [dayType, setDayType] = useState<DayType>(currentKoreaDayType());
   const [timeSlot, setTimeSlot] = useState(defaultTimeSlot());
   const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [layout, setLayout] = useState<TrainLayoutResponse | null>(null);
