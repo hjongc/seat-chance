@@ -799,6 +799,7 @@ a:focus-visible {
 
 .source-text {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .cautions {
@@ -817,17 +818,99 @@ a:focus-visible {
   line-height: var(--leading-normal);
 }
 
-@media (max-width: 420px) {
+@media (max-width: 560px) {
+  .app-shell {
+    gap: var(--space-3);
+    padding-bottom: 32px;
+  }
+
+  .topbar,
+  .search-panel,
+  .notice,
+  .empty-state,
+  .result-panel {
+    width: min(100% - 20px, 1120px);
+  }
+
+  .topbar {
+    padding-top: 14px;
+  }
+
   .topbar-meta {
     display: none;
   }
 
   .search-panel-header {
     display: grid;
+    gap: var(--space-3);
+  }
+
+  .search-panel-header h1 {
+    font-size: 26px;
+  }
+
+  .search-status {
+    justify-self: start;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .search-meta,
+  .search-grid {
+    gap: var(--space-3);
+  }
+
+  .result-heading {
+    display: grid;
+  }
+
+  .line-chip {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .recommendation-item {
+    gap: 10px;
+    grid-template-columns: 40px 1fr;
+    padding: 12px;
+  }
+
+  .rank-box {
+    height: 40px;
+    width: 40px;
+  }
+
+  .layout-meta {
+    align-items: start;
+    display: grid;
+    gap: 2px;
+  }
+
+  .layout-meta span {
+    line-height: var(--leading-snug);
+  }
+}
+
+@media (max-width: 360px) {
+  .brand-mark {
+    height: 40px;
+    width: 40px;
+  }
+
+  .search-panel {
+    padding: 14px;
+  }
+
+  .search-panel-header h1 {
+    font-size: 24px;
   }
 
   .search-meta {
-    grid-template-columns: 1fr;
+    padding: 8px;
+  }
+
+  .recommendation-copy ul {
+    padding-left: 16px;
   }
 }
 
