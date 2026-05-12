@@ -353,7 +353,8 @@ function toRecommendation(
   }
 
   const range = Math.max(1, maxRaw - minRaw);
-  const relativeScore = 50 + ((candidate.rawScore - minRaw) / range) * 45;
+  const normalizedScore = (candidate.rawScore - minRaw) / range;
+  const relativeScore = 28 + normalizedScore * 52;
   const score = clamp(roundToTenth(relativeScore - congestionPenalty), 0, 100);
   const sortedContributions = [...candidate.contributions].sort((left, right) => right.score - left.score);
 
@@ -384,9 +385,9 @@ function toDataShortageRecommendations(layout: TrainLayout, reason: string): Rec
 
 function getCongestionPenalty(profile: CongestionProfile | undefined): number {
   if (!profile) {
-    return 4;
+    return 3;
   }
-  return clamp((profile.congestionPct - 115) * 0.18, 0, 14);
+  return clamp((profile.congestionPct - 100) * 0.28, 0, 22);
 }
 
 function stationCrowdingFactor(congestionPct: number): number {
@@ -394,10 +395,10 @@ function stationCrowdingFactor(congestionPct: number): number {
 }
 
 function toGrade(score: number) {
-  if (score >= 78) {
+  if (score >= 72) {
     return "HIGH";
   }
-  if (score >= 62) {
+  if (score >= 54) {
     return "MEDIUM";
   }
   return "LOW";

@@ -516,21 +516,22 @@ function RecommendationCard({
         {item.car_no}-{item.door_no} 문
       </strong>
       <p className="recommendation-summary">예상 기회 구간 {item.expected_seat_window}</p>
-      <p className="recommendation-meta">앉을각 {Math.round(item.score)}점</p>
-      <ReasonPills reasons={item.reasons} />
+      <p className="recommendation-meta">상대 점수 {Math.round(item.score)}점</p>
+      <p className="recommendation-meta-subtle">같은 구간 안에서 비교한 추천 점수</p>
+      <ReasonList reasons={item.reasons} />
     </article>
   );
 }
 
-function ReasonPills({ reasons }: { reasons: string[] }) {
+function ReasonList({ reasons }: { reasons: string[] }) {
   return (
-    <div className="reason-pills">
+    <ul className="reason-list">
       {reasons.map((reason) => (
-        <span className="reason-pill" key={reason}>
+        <li className="reason-item" key={reason}>
           {reason}
-        </span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
