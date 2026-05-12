@@ -226,6 +226,7 @@ summary:focus-visible {
   line-height: 0.94;
   margin: 0;
   max-width: 9ch;
+  overflow-wrap: anywhere;
 }
 
 .hero-lede {
@@ -233,6 +234,7 @@ summary:focus-visible {
   font-size: clamp(1rem, 2vw, 1.125rem);
   margin: 16px 0 0;
   max-width: 38rem;
+  overflow-wrap: anywhere;
 }
 
 .hero-actions {
@@ -277,6 +279,7 @@ summary:focus-visible {
   font-size: var(--text-sm);
   margin: 18px 0 0;
   max-width: 42rem;
+  overflow-wrap: anywhere;
 }
 
 .search-panel,
@@ -521,6 +524,7 @@ summary:focus-visible {
 
 .notice p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .empty-state {
@@ -530,11 +534,15 @@ summary:focus-visible {
 .empty-state-copy {
   display: grid;
   gap: 6px;
+  min-width: 0;
+  width: 100%;
 }
 
 .empty-state-copy p {
   color: var(--color-text-soft);
   font-size: var(--text-sm);
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .result-shell {
@@ -870,7 +878,8 @@ summary:focus-visible {
   }
 
   .hero-title {
-    max-width: 7ch;
+    font-size: clamp(2.75rem, 11vw, 3.4rem);
+    max-width: 8.5ch;
   }
 
   .hero-actions,
@@ -890,6 +899,25 @@ summary:focus-visible {
     width: 100%;
   }
 
+  .hero-lede {
+    font-size: 15px;
+    max-width: 100%;
+  }
+
+  .hero-meta,
+  .status-note {
+    font-size: 13px;
+    max-width: 100%;
+  }
+
+  .search-panel {
+    gap: 20px;
+  }
+
+  .search-grid {
+    gap: 14px;
+  }
+
   .search-panel,
   .notice,
   .empty-state,
@@ -897,6 +925,12 @@ summary:focus-visible {
   .recommendation-card,
   .result-details {
     padding: 20px;
+  }
+
+  .notice,
+  .empty-state {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

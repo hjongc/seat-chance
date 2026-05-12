@@ -325,9 +325,9 @@ export function HomeClient() {
           </div>
 
           <p className="hero-meta">
-            {lineLoading ? "노선 데이터를 확인하는 중입니다." : `${lineOptions.length}개 노선을 바로 검색할 수 있습니다.`}
+            {lineLoading ? "노선 데이터 준비 중입니다." : `${lineOptions.length}개 노선 지원`}
             {" · "}
-            {direction ? directionSummary : "방향은 승차역과 하차역을 고르면 자동으로 계산됩니다."}
+            {direction ? `${directionLabel(lineNo, direction)} 방향` : "방향 자동 계산"}
           </p>
         </div>
       </section>
