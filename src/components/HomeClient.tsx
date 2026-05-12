@@ -333,7 +333,6 @@ export function HomeClient() {
             eyebrow="Search"
             title="지금 탈 구간을 입력하세요"
             description="노선, 역, 시간만 고르면 칸과 문 위치를 바로 제안합니다."
-            aside={lineNo ? <span className="status-chip">추천 역 {featuredStationComboOptions.length}개</span> : null}
           />
 
           <div className="search-grid">
@@ -419,7 +418,7 @@ export function HomeClient() {
           <div className="search-footer">
             <div className="search-meta">
               <p className="status-note" aria-live="polite">{readinessMessage}</p>
-              <p className="support-note">추천 역은 환승역, 종점, 주요 역 중심으로 최대 {FEATURED_STATION_LIMIT}개를 먼저 보여줍니다.</p>
+              <p className="support-note">역 검색을 열면 환승역과 주요 역을 먼저 보여줍니다.</p>
             </div>
 
             <button className="primary-action" type="submit" disabled={!canSubmit}>
