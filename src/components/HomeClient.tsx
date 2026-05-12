@@ -389,6 +389,7 @@ export function HomeClient() {
               <div className="segmented-control" role="group" aria-label="요일 유형">
                 {dayTypeOptions.map((option) => (
                   <button
+                    aria-pressed={dayType === option.value}
                     className={dayType === option.value ? "segment-option segment-option-active" : "segment-option"}
                     key={option.value}
                     onClick={() => setDayType(option.value)}
