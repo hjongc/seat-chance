@@ -16,6 +16,12 @@
 - 추천 근거
 - 열차 칸·문 배치
 
+## 화면 예시
+
+| 검색 화면 | 추천 결과 |
+|---|---|
+| <img src="docs/assets/home-mobile.png" alt="앉을각 모바일 검색 화면" width="260"> | <img src="docs/assets/result-mobile.png" alt="앉을각 모바일 추천 결과 화면" width="260"> |
+
 ## 사용 방법
 
 1. 호선을 선택합니다.
