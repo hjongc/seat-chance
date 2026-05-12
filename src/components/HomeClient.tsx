@@ -110,9 +110,9 @@ const featuredStationNames = new Set([
   "홍대입구"
 ]);
 
-const dayTypeOptions: Array<{ value: DayType; label: string }> = [
-  { value: "WEEKDAY", label: "평일" },
-  { value: "WEEKEND", label: "주말·공휴일" }
+const dayTypeOptions: Array<{ value: DayType; label: string; ariaLabel: string }> = [
+  { value: "WEEKDAY", label: "평일", ariaLabel: "평일" },
+  { value: "WEEKEND", label: "주말/휴일", ariaLabel: "주말 및 공휴일" }
 ];
 const emptyComboOptions: ComboOption[] = [];
 const FEATURED_STATION_LIMIT = 10;
@@ -389,6 +389,7 @@ export function HomeClient() {
               <div className="segmented-control" role="group" aria-label="요일 유형">
                 {dayTypeOptions.map((option) => (
                   <button
+                    aria-label={option.ariaLabel}
                     aria-pressed={dayType === option.value}
                     className={dayType === option.value ? "segment-option segment-option-active" : "segment-option"}
                     key={option.value}
