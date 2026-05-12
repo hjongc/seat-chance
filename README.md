@@ -1,97 +1,86 @@
 # 앉을각
 
-서울 지하철 노선별 앉을각이 높은 호차-문 위치를 추천하는 모바일 퍼스트 웹 MVP입니다.
+서울 지하철에서 앉을 가능성이 높은 **칸·문 위치**를 추천하는 웹 서비스입니다.
 
-## Data Flow
+서비스: https://seat-chance.vercel.app
 
-운영 데이터 경로는 하드코딩하지 않습니다.
+## 무엇을 해주나요?
 
-1. GitHub Actions 또는 로컬에서 `npm run db:ingest` 실행
-2. `scripts/ingest-public-data.mjs`가 공공 API/CSV 소스에서 데이터를 수집
-3. 수집값을 Postgres 테이블에 upsert. GitHub Actions는 1~9호선과 공항철도, 경의중앙, 경춘, 수인분당, 신분당, 우이신설, 서해, 김포골드, 신림선을 순차 수집합니다.
-4. `scripts/export-transit-lines.mjs`가 `station_line_order`에서 전체 노선/역 목록을 `public/transit-lines.json`으로 생성
-5. 모바일 UI는 시작 시 정적 `/transit-lines.json`을 읽고, 추천 계산 시에만 API를 호출
-6. Next.js Route Handler가 Postgres에서 조회해 추천 점수를 계산
+앉을각은 출발역, 하차역, 요일 유형, 출발 시간을 바탕으로 어느 칸의 어느 문 근처에 서면 좌석 회전 기회가 상대적으로 높은지 보여줍니다.
 
-`DATABASE_URL`이 없으면 앱 API는 추천을 만들지 않습니다. 개발 편의용 더미 추천 응답은 두지 않습니다. 빌드는 커밋된 정적 노선 파일을 사용하며, DB에서 정적 노선 파일을 다시 만들 때만 `npm run export:transit-lines`를 실행합니다.
+추천 결과는 다음을 포함합니다.
 
-## Required Sources
+- 앉을 가능성이 높은 칸·문 Top 3
+- 앉을각 점수
+- 좌석 기회가 생길 가능성이 높은 중간 구간
+- 추천 근거
+- 열차 칸·문 배치
 
-- `SEOUL_OPEN_API_KEY`: 서울 열린데이터광장 API 키
-- `SEOUL_REALTIME_SUBWAY_API_KEY`: 서울 열린데이터광장 실시간 지하철 API 키. 현재 MVP 추천 계산에는 사용하지 않고, 실시간 열차/운행 확장 때 사용합니다.
-- `DATA_GO_KR_API_KEY`: 공공데이터포털 URL 인코딩 service key
-- `TARGET_LINE_NO`: 실행 대상 노선 번호 목록(예: `1,2,9`). 비워두면 노선 목록을 자동 발견해 전체 라인을 순회합니다.
-- `INGEST_REQUEST_TIMEOUT_MS`: 공공 API 요청 타임아웃(ms), 기본값 25000
-- `INGEST_FETCH_ATTEMPTS`: 공공 API 재시도 횟수, 기본값 3 (최대 8)
-- `TRANSFER_CSV_URL` 또는 `TRANSFER_API_URL_TEMPLATE`
-- `TRANSFER_DEMAND_CSV_URL` 또는 `TRANSFER_DEMAND_API_URL_TEMPLATE`: 서울교통공사 환승역 환승인원정보 CSV/API
-- `TRANSFER_DEMAND_OBSERVED_ON`: 환승인원 관측일(YYYY-MM-DD). 소스 URL에 기준일이 없을 때 사용합니다.
-- `FAST_EXIT_API_URL_TEMPLATE`
-- `TRAIN_OPERATION_CSV_URL` 또는 `TRAIN_OPERATION_API_URL_TEMPLATE`
-- `CONGESTION_CSV_URL` 또는 `CONGESTION_API_URL_TEMPLATE`
-- `TARGET_LINE_NO`: 로컬 수집 대상 호선. 예: `3`, `신분당`, `우이신설`.
+## 사용 방법
 
-서울 열린데이터광장 승하차 시간대 데이터는 `CardSubwayTime`, 역 정보는 `SearchSTNBySubwayLineInfo`를 사용합니다. 환승정보, 환승역 환승인원정보, 빠른하차정보, 열차운행현황, 혼잡도는 환경변수로 지정한 공공 API/CSV 소스에서 가져옵니다. 혼잡도 소스는 노선 평균 패널티와 역별 좌석 경쟁 보정에 함께 사용합니다.
+1. 호선을 선택합니다.
+2. 승차역과 하차역을 선택하거나 검색합니다.
+3. 요일 유형을 확인합니다. 기본값은 한국 시간 기준 오늘 날짜에 맞춰 `평일` 또는 `주말·공휴일`로 자동 설정됩니다.
+4. 출발 시간을 선택합니다.
+5. `앉을각 추천 받기`를 누릅니다.
+6. 결과에 나온 `3-2 문` 같은 위치를 보고 해당 칸·문 근처에 섭니다.
 
-## Production Environment
+`3-2 문`은 3호차의 2번째 문을 뜻합니다.
 
-Vercel project environment variables:
+## 결과를 어떻게 읽나요?
 
-```text
-DATABASE_URL
-NEXT_PUBLIC_SITE_URL
-PG_POOL_MAX
-PG_CONNECTION_TIMEOUT_MS
-PG_IDLE_TIMEOUT_MS
-RECOMMENDATION_CACHE_TTL_SECONDS
-HEALTH_MAX_INGESTION_AGE_HOURS
-```
+앉을각 점수는 실제 착석 확률이 아닙니다. 같은 경로 안에서 어느 위치가 상대적으로 나은지 비교하기 위한 점수입니다.
 
-GitHub Actions secrets:
+예를 들어 `앉을각 점수 82점`은 “82% 확률로 앉는다”는 뜻이 아니라, 선택한 경로와 시간대에서 다른 문보다 좌석 회전 조건이 더 좋다는 뜻입니다.
 
-```text
-DATABASE_URL
-SEOUL_OPEN_API_KEY
-SEOUL_REALTIME_SUBWAY_API_KEY
-DATA_GO_KR_API_KEY
-TRANSFER_CSV_URL or TRANSFER_API_URL_TEMPLATE
-TRANSFER_DEMAND_CSV_URL or TRANSFER_DEMAND_API_URL_TEMPLATE
-TRANSFER_DEMAND_OBSERVED_ON (optional)
-FAST_EXIT_API_URL_TEMPLATE
-TRAIN_OPERATION_CSV_URL or TRAIN_OPERATION_API_URL_TEMPLATE
-CONGESTION_CSV_URL or CONGESTION_API_URL_TEMPLATE
-TARGET_LINE_NO
-INGEST_REQUEST_TIMEOUT_MS
-INGEST_FETCH_ATTEMPTS
-ALERT_WEBHOOK_URL (optional)
-```
+추천 근거에는 보통 다음 요소가 반영됩니다.
 
-GitHub Actions variables:
+- 중간역 하차 수요
+- 환승 수요와 환승 동선
+- 역별 혼잡도
+- 같은 시간대 승차 수요
+- 목적지까지 남은 거리
 
-```text
-NEXT_PUBLIC_SITE_URL
-```
+## 언제 유용한가요?
 
-Never commit real API keys or database URLs. If a key is exposed in chat, issue trackers, logs, or shell history, rotate it before public production launch.
+- 출퇴근 시간처럼 열차가 붐비는 시간
+- 지하철을 여러 정거장 이상 타는 이동
+- 어디에 서야 할지 빠르게 정하고 싶은 상황
 
-## Local Commands
+다만 실시간 빈 좌석을 알려주는 서비스는 아닙니다. 실제 열차 상황, 지연, 행사, 날씨, 편성 차이 등은 결과와 다를 수 있습니다.
+
+## 지원 데이터
+
+앉을각은 공공 교통 데이터와 자체 정제 데이터를 이용합니다.
+
+- 역별·시간대별 승하차 데이터
+- 환승역 환승 수요
+- 혼잡도 데이터
+- 열차 칸·문 레이아웃
+- 노선별 역 순서
+- 한국 공휴일과 대체공휴일 판정
+
+상세한 데이터 수집과 운영 방식은 [운영 문서](docs/OPERATIONS.md)를 참고하세요.
+
+## 개발자용 빠른 시작
 
 ```bash
 npm install
-npm run db:ingest
-npm run export:transit-lines
 npm run dev
 ```
 
-## API
+품질 확인:
 
-```http
-GET /transit-lines.json
-GET /api/v1/stations?line_no=3
-GET /api/v1/train-layout?line_no=3&direction=오금
-GET /api/v1/recommendations?origin=경복궁&destination=신사&line_no=3&direction=오금&day_type=WEEKDAY&time_slot=08:30&mode=seat
-GET /api/v1/recommendations?origin=연천&destination=신창&line_no=1&direction=신창&day_type=WEEKEND&time_slot=08:30&mode=seat
-GET /api/v1/health
+```bash
+npm run typecheck
+npm test
+npm run build
 ```
 
-`datetime` remains supported as a compatibility fallback when `day_type` and `time_slot` are not provided. It is interpreted in Korea time and maps Korean public holidays to `WEEKEND`.
+추천 API와 응답 형식은 [API 문서](docs/API.md)를 참고하세요.
+
+## 문서
+
+- [제품 원칙](docs/PRODUCT.md)
+- [API 문서](docs/API.md)
+- [데이터와 운영](docs/OPERATIONS.md)
