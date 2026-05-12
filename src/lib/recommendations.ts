@@ -256,6 +256,7 @@ function scoreCandidate({
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
     const transferDemand = transferProfile ? transferProfile.transferPassengers / maxTransferPassengers : 0;
+    const transferLift = transferDemandLift(transferDemand);
     const stationCongestion = stationCongestionByStation.get(station.stationName);
     const stationCongestionPct = stationCongestion?.congestionPct ?? null;
     const crowdingFactor = stationCongestionPct === null ? 1 : stationCrowdingFactor(stationCongestionPct);
@@ -280,9 +281,9 @@ function scoreCandidate({
         ? 1
         : 0.8
       : 0;
-    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight * crowdingFactor;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferLift * 2.8) * distanceWeight * crowdingFactor;
     const hintDemand = matchingHint?.hint.kind === "transfer"
-      ? Math.max(stationDemand, transferDemand * 0.85)
+      ? clamp(stationDemand + transferLift, 0, 1)
       : stationDemand;
     const hintBonus = matchingHint
       ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor * crowdingFactor
@@ -394,6 +395,10 @@ function opportunityDistanceWeight(stationsAfter: number, totalStops: number) {
 
   const remainingRatio = stationsAfter / totalStops;
   return clamp(0.32 + Math.pow(remainingRatio, 0.65) * 0.68, 0.25, 1);
+}
+
+function transferDemandLift(transferDemand: number): number {
+  return Math.sqrt(clamp(transferDemand, 0, 1)) * 0.45;
 }
 
 function stationCrowdingFactor(congestionPct: number): number {
