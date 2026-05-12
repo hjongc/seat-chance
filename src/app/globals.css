@@ -210,7 +210,7 @@ summary:focus-visible {
 .search-panel,
 .notice,
 .empty-state,
-.spotlight-panel,
+.advisory-panel,
 .recommendation-card,
 .result-details {
   animation: rise-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -225,8 +225,14 @@ summary:focus-visible {
   letter-spacing: -0.055em;
   line-height: 0.94;
   margin: 0;
-  max-width: 9ch;
-  overflow-wrap: anywhere;
+  max-width: 16ch;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  word-break: keep-all;
+}
+
+.hero-title-line {
+  display: block;
 }
 
 .hero-lede {
@@ -285,15 +291,22 @@ summary:focus-visible {
 .search-panel,
 .notice,
 .empty-state,
-.spotlight-panel,
+.advisory-panel,
 .recommendation-card,
 .result-details {
   padding: 24px;
 }
 
+.search-shell {
+  position: relative;
+  z-index: 4;
+}
+
 .search-panel {
   display: grid;
   gap: 24px;
+  overflow: visible;
+  position: relative;
 }
 
 .panel-heading,
@@ -346,7 +359,6 @@ summary:focus-visible {
 }
 
 .search-grid,
-.metric-grid,
 .alternatives-grid {
   display: grid;
   gap: 16px;
@@ -356,6 +368,12 @@ summary:focus-visible {
   display: grid;
   gap: 8px;
   min-width: 0;
+  position: relative;
+  z-index: 0;
+}
+
+.field:focus-within {
+  z-index: 30;
 }
 
 .field span {
@@ -438,6 +456,10 @@ summary:focus-visible {
   position: relative;
 }
 
+.combo-box-open {
+  z-index: 40;
+}
+
 .combo-menu {
   backdrop-filter: blur(16px);
   background: rgba(255, 255, 255, 0.97);
@@ -451,7 +473,7 @@ summary:focus-visible {
   overflow-y: auto;
   padding: 8px;
   position: absolute;
-  z-index: 20;
+  z-index: 80;
 }
 
 .combo-section-label {
@@ -498,11 +520,22 @@ summary:focus-visible {
   padding-top: 20px;
 }
 
+.search-meta {
+  display: grid;
+  gap: 6px;
+  max-width: 34rem;
+}
+
 .status-note {
   color: var(--color-text-soft);
   font-size: var(--text-sm);
   margin: 0;
-  max-width: 34rem;
+}
+
+.support-note {
+  color: var(--color-text-soft);
+  font-size: var(--text-xs);
+  margin: 0;
 }
 
 .primary-action {
@@ -548,6 +581,8 @@ summary:focus-visible {
 .result-shell {
   display: grid;
   gap: 16px;
+  position: relative;
+  z-index: 1;
 }
 
 .route-label {
@@ -567,11 +602,6 @@ summary:focus-visible {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--color-line);
   color: var(--color-text-soft);
-}
-
-.spotlight-panel {
-  background: linear-gradient(180deg, rgba(255, 248, 243, 0.96), rgba(255, 255, 255, 0.9));
-  border-color: var(--color-brand-line);
 }
 
 .rank-badge {
@@ -599,51 +629,26 @@ summary:focus-visible {
   color: var(--color-warning);
 }
 
-.spotlight-route,
-.spotlight-summary,
-.recommendation-card-route,
+.advisory-panel {
+  background: rgba(255, 247, 231, 0.82);
+  border-color: rgba(127, 88, 26, 0.14);
+}
+
+.recommendation-summary,
 .recommendation-meta,
 .caution-list,
-.reason-list,
 .source-text,
 .layout-meta span,
 .door-cell small {
   color: var(--color-text-soft);
 }
 
-.spotlight-route,
-.recommendation-card-route {
-  font-size: var(--text-sm);
-  margin: 16px 0 0;
-}
-
-.spotlight-door {
-  font-size: clamp(2.25rem, 6vw, 3.25rem);
-  letter-spacing: -0.05em;
-  line-height: 0.95;
-  margin: 8px 0 0;
-}
-
-.spotlight-summary,
+.recommendation-summary,
 .recommendation-meta {
   font-size: var(--text-sm);
   margin: 8px 0 0;
 }
 
-.metric-grid {
-  margin-top: 20px;
-}
-
-.metric-card {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--color-line);
-  border-radius: 18px;
-  display: grid;
-  gap: 4px;
-  padding: 16px;
-}
-
-.metric-card dt,
 .context-label,
 .car-label {
   color: var(--color-text-soft);
@@ -651,33 +656,11 @@ summary:focus-visible {
   font-weight: 800;
 }
 
-.metric-card dd {
-  font-size: var(--text-lg);
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  line-height: var(--leading-tight);
-}
-
-.metric-card p {
-  color: var(--color-text-soft);
-  font-size: var(--text-xs);
-}
-
-.metric-card-accent {
-  background: rgba(255, 241, 231, 0.96);
-  border-color: var(--color-brand-line);
-}
-
-.metric-card-success {
-  background: rgba(237, 248, 242, 0.96);
-  border-color: var(--color-success-line);
-}
-
 .reason-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: 18px;
 }
 
 .reason-pill {
@@ -689,16 +672,30 @@ summary:focus-visible {
   padding: 8px 12px;
 }
 
-.caution-block {
-  background: rgba(255, 247, 231, 0.84);
-  border: 1px solid rgba(127, 88, 26, 0.14);
-  border-radius: 16px;
-  margin-top: 20px;
-  padding: 16px;
+.recommendation-card {
+  background: rgba(255, 255, 255, 0.78);
 }
 
-.caution-list,
-.reason-list {
+.recommendation-card-lead {
+  background: linear-gradient(180deg, rgba(255, 248, 243, 0.96), rgba(255, 255, 255, 0.9));
+  border-color: var(--color-brand-line);
+}
+
+.recommendation-door {
+  display: block;
+  font-size: var(--text-xl);
+  letter-spacing: -0.03em;
+  line-height: var(--leading-tight);
+  margin-top: 14px;
+}
+
+.recommendation-door-lead {
+  font-size: clamp(2.25rem, 6vw, 3.2rem);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.caution-list {
   display: grid;
   gap: 8px;
   margin: 10px 0 0;
@@ -707,18 +704,6 @@ summary:focus-visible {
 
 .alternatives-grid {
   gap: 12px;
-}
-
-.recommendation-card {
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.recommendation-card strong {
-  display: block;
-  font-size: var(--text-xl);
-  letter-spacing: -0.03em;
-  line-height: var(--leading-tight);
-  margin-top: 8px;
 }
 
 .result-details {
@@ -845,7 +830,7 @@ summary:focus-visible {
   .search-panel,
   .notice,
   .empty-state,
-  .spotlight-panel,
+  .advisory-panel,
   .recommendation-card,
   .result-details {
     animation: none;
@@ -878,8 +863,16 @@ summary:focus-visible {
   }
 
   .hero-title {
-    font-size: clamp(2.75rem, 11vw, 3.4rem);
-    max-width: 8.5ch;
+    font-size: clamp(2.15rem, 9.8vw, 2.85rem);
+    max-width: 11ch;
+  }
+
+  .hero-title-line {
+    display: inline;
+  }
+
+  .hero-title-line + .hero-title-line::before {
+    content: " ";
   }
 
   .hero-actions,
@@ -905,7 +898,8 @@ summary:focus-visible {
   }
 
   .hero-meta,
-  .status-note {
+  .status-note,
+  .support-note {
     font-size: 13px;
     max-width: 100%;
   }
@@ -921,7 +915,7 @@ summary:focus-visible {
   .search-panel,
   .notice,
   .empty-state,
-  .spotlight-panel,
+  .advisory-panel,
   .recommendation-card,
   .result-details {
     padding: 20px;
@@ -938,10 +932,6 @@ summary:focus-visible {
   .search-grid,
   .alternatives-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .metric-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

@@ -72,13 +72,6 @@ interface ScoredStationOption {
   sequenceNo: number;
 }
 
-interface MetricItem {
-  label: string;
-  value: string;
-  detail: string;
-  tone?: "accent" | "success";
-}
-
 const featuredStationNames = new Set([
   "가락시장",
   "강남",
@@ -122,6 +115,7 @@ const dayTypeOptions: Array<{ value: DayType; label: string }> = [
   { value: "WEEKEND", label: "주말·공휴일" }
 ];
 const emptyComboOptions: ComboOption[] = [];
+const FEATURED_STATION_LIMIT = 10;
 
 export function HomeClient() {
   const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
@@ -310,8 +304,8 @@ export function HomeClient() {
         <div className="hero-copy">
           <p className="eyebrow">Seoul Metro Seat Planner</p>
           <h1 className="hero-title" id="app-title">
-            서서 기다리는 시간을
-            앉을 가능성으로 바꿉니다.
+            <span className="hero-title-line">서서 기다리는 시간을</span>
+            <span className="hero-title-line">앉을 가능성으로 바꿉니다.</span>
           </h1>
           <p className="hero-lede">
             승차역, 하차역, 출발 시간만 입력하면 어느 칸의 어느 문 앞에 서야 할지 빠르게 정리합니다.
@@ -327,7 +321,7 @@ export function HomeClient() {
           <p className="hero-meta">
             {lineLoading ? "노선 데이터 준비 중입니다." : `${lineOptions.length}개 노선 지원`}
             {" · "}
-            {direction ? `${directionLabel(lineNo, direction)} 방향` : "방향 자동 계산"}
+            입력 후 바로 추천
           </p>
         </div>
       </section>
@@ -339,7 +333,7 @@ export function HomeClient() {
             eyebrow="Search"
             title="지금 탈 구간을 입력하세요"
             description="노선, 역, 시간만 고르면 칸과 문 위치를 바로 제안합니다."
-            aside={direction ? <span className="status-chip">{directionSummary}</span> : null}
+            aside={lineNo ? <span className="status-chip">추천 역 {featuredStationComboOptions.length}개</span> : null}
           />
 
           <div className="search-grid">
@@ -421,7 +415,10 @@ export function HomeClient() {
           </div>
 
           <div className="search-footer">
-            <p className="status-note" aria-live="polite">{readinessMessage}</p>
+            <div className="search-meta">
+              <p className="status-note" aria-live="polite">{readinessMessage}</p>
+              <p className="support-note">추천 역은 환승역, 종점, 주요 역 중심으로 최대 {FEATURED_STATION_LIMIT}개를 먼저 보여줍니다.</p>
+            </div>
 
             <button className="primary-action" type="submit" disabled={!canSubmit}>
               <Search size={18} aria-hidden="true" />
@@ -466,26 +463,6 @@ function ResultView({
     return null;
   }
 
-  const resultMetrics: MetricItem[] = [
-    {
-      label: "1순위 위치",
-      value: `${leadRecommendation.car_no}-${leadRecommendation.door_no} 문`,
-      detail: `앉을각 ${Math.round(leadRecommendation.score)}점`,
-      tone: "accent"
-    },
-    {
-      label: "요일 유형",
-      value: formatDayType(recommendation.day_type),
-      detail: formatTimeRange(recommendation.time_slot)
-    },
-    {
-      label: "방향",
-      value: directionLabel(recommendation.line_no, recommendation.direction),
-      detail: `${recommendation.origin} → ${recommendation.destination}`,
-      tone: "success"
-    }
-  ];
-
   return (
     <section className="result-shell" aria-label="추천 결과">
       <div className="result-heading">
@@ -495,43 +472,12 @@ function ResultView({
           </p>
           <h2 className="result-title">앉을 가능성이 높은 위치</h2>
         </div>
-        <span className="result-chip">
-          {lineDisplayLabel(recommendation.line_no)} · {formatDayType(recommendation.day_type)} {recommendation.time_slot}
-        </span>
+        <span className="result-chip">{lineDisplayLabel(recommendation.line_no)} 추천 결과</span>
       </div>
 
-      <article className="product-panel spotlight-panel">
-        <div className="spotlight-top">
-          <span className="rank-badge">1위 추천</span>
-          <span className={`grade grade-${leadRecommendation.grade.toLowerCase()}`}>{leadRecommendation.grade}</span>
-        </div>
-        <p className="spotlight-route">{directionLabel(recommendation.line_no, recommendation.direction)} 방향</p>
-        <h3 className="spotlight-door">
-          {leadRecommendation.car_no}-{leadRecommendation.door_no} 문
-        </h3>
-        <p className="spotlight-summary">예상 기회 구간 {leadRecommendation.expected_seat_window}</p>
+      {recommendation.cautions.length > 0 ? <CautionPanel cautions={recommendation.cautions} /> : null}
 
-        <MetricGrid compact items={resultMetrics} />
-
-        <div className="reason-pills">
-          {leadRecommendation.reasons.map((reason) => (
-            <span className="reason-pill" key={reason}>
-              {reason}
-            </span>
-          ))}
-        </div>
-
-        {recommendation.cautions.length > 0 ? (
-          <div className="caution-block">
-            <p className="context-label">참고사항</p>
-            <ul className="caution-list">
-              {recommendation.cautions.map((caution) => (
-                <li key={caution}>{caution}</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </article>
+      <RecommendationCard item={leadRecommendation} lead />
 
       {alternativeRecommendations.length > 0 ? (
         <div className="alternatives-grid">
@@ -551,24 +497,49 @@ function ResultView({
   );
 }
 
-function RecommendationCard({ item }: { item: Recommendation }) {
+function RecommendationCard({
+  item,
+  lead = false
+}: {
+  item: Recommendation;
+  lead?: boolean;
+}) {
   return (
-    <article className="product-panel recommendation-card">
+    <article className={lead ? "product-panel recommendation-card recommendation-card-lead" : "product-panel recommendation-card"}>
       <div className="recommendation-card-top">
-        <span className="rank-badge rank-badge-subtle">{item.rank}위</span>
+        <span className={lead ? "rank-badge" : "rank-badge rank-badge-subtle"}>{lead ? "1위 추천" : `${item.rank}위 대안`}</span>
         <span className={`grade grade-${item.grade.toLowerCase()}`}>{item.grade}</span>
       </div>
 
-      <p className="recommendation-card-route">대안 위치</p>
-      <strong>
+      <strong className={lead ? "recommendation-door recommendation-door-lead" : "recommendation-door"}>
         {item.car_no}-{item.door_no} 문
       </strong>
-      <p className="spotlight-summary">예상 기회 구간 {item.expected_seat_window}</p>
-      <p className="recommendation-meta">앉을각 점수 {Math.round(item.score)}점</p>
+      <p className="recommendation-summary">예상 기회 구간 {item.expected_seat_window}</p>
+      <p className="recommendation-meta">앉을각 {Math.round(item.score)}점</p>
+      <ReasonPills reasons={item.reasons} />
+    </article>
+  );
+}
 
-      <ul className="reason-list">
-        {item.reasons.map((reason) => (
-          <li key={reason}>{reason}</li>
+function ReasonPills({ reasons }: { reasons: string[] }) {
+  return (
+    <div className="reason-pills">
+      {reasons.map((reason) => (
+        <span className="reason-pill" key={reason}>
+          {reason}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CautionPanel({ cautions }: { cautions: string[] }) {
+  return (
+    <article className="product-panel advisory-panel">
+      <p className="context-label">참고사항</p>
+      <ul className="caution-list">
+        {cautions.map((caution) => (
+          <li key={caution}>{caution}</li>
         ))}
       </ul>
     </article>
@@ -658,20 +629,6 @@ function PanelHeading({
   );
 }
 
-function MetricGrid({ compact = false, items }: { compact?: boolean; items: MetricItem[] }) {
-  return (
-    <dl className={compact ? "metric-grid metric-grid-compact" : "metric-grid"}>
-      {items.map((item) => (
-        <div className={item.tone ? `metric-card metric-card-${item.tone}` : "metric-card"} key={`${item.label}-${item.value}`}>
-          <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
-          <p>{item.detail}</p>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function ComboBox({
   value,
   options,
@@ -754,7 +711,7 @@ function ComboBox({
   }
 
   return (
-    <div className="combo-box">
+    <div className={open ? "combo-box combo-box-open" : "combo-box"}>
       <input
         aria-activedescendant={open && activeOption ? optionId(inputId, activeOption.value) : undefined}
         aria-autocomplete="list"
@@ -777,7 +734,7 @@ function ComboBox({
             showFeaturedOptions ? (
               <>
                 <div className="combo-section-label" role="presentation">
-                  빠른 선택
+                  추천 역
                 </div>
                 {featuredOptions.map((option, index) => renderComboOption(option, index))}
                 {regularOptions.length > 0 ? (
@@ -866,11 +823,75 @@ function buildFeaturedStationOptions(
     })
     .filter((station): station is ScoredStationOption => station !== null);
 
-  return scoredStations
-    .sort((left, right) => right.score - left.score || left.sequenceNo - right.sequenceNo)
-    .slice(0, 6)
+  const rankedStations = [...scoredStations].sort(
+    (left, right) => right.score - left.score || left.sequenceNo - right.sequenceNo
+  );
+
+  return rankedStations
+    .slice(0, FEATURED_STATION_LIMIT)
+    .concat(pickSupplementaryStations(stations, rankedStations, FEATURED_STATION_LIMIT))
     .sort((left, right) => left.sequenceNo - right.sequenceNo)
+    .filter((station, index, items) => items.findIndex((item) => item.option.value === station.option.value) === index)
+    .slice(0, FEATURED_STATION_LIMIT)
     .map((station) => station.option);
+}
+
+function pickSupplementaryStations(
+  stations: StationOption[],
+  scoredStations: ScoredStationOption[],
+  limit: number
+): ScoredStationOption[] {
+  const selectedValues = new Set(scoredStations.slice(0, limit).map((station) => station.option.value));
+  const remainingStations = stations.filter((station) => !selectedValues.has(station.station_name));
+  const slots = Math.min(limit - selectedValues.size, remainingStations.length);
+
+  if (slots <= 0) {
+    return [];
+  }
+
+  const pickedIndices = new Set<number>();
+  const supplementaryStations: ScoredStationOption[] = [];
+
+  for (let index = 0; index < slots; index += 1) {
+    const candidateIndex = Math.min(
+      remainingStations.length - 1,
+      Math.floor(((index + 0.5) * remainingStations.length) / slots)
+    );
+    const resolvedIndex = resolveUnusedIndex(candidateIndex, remainingStations.length, pickedIndices);
+    if (resolvedIndex === null) {
+      continue;
+    }
+
+    pickedIndices.add(resolvedIndex);
+    const station = remainingStations[resolvedIndex];
+    supplementaryStations.push({
+      option: { value: station.station_name, label: station.station_name },
+      score: 0,
+      sequenceNo: station.sequence_no
+    });
+  }
+
+  return supplementaryStations;
+}
+
+function resolveUnusedIndex(startIndex: number, total: number, used: Set<number>) {
+  if (!used.has(startIndex)) {
+    return startIndex;
+  }
+
+  for (let offset = 1; offset < total; offset += 1) {
+    const nextIndex = startIndex + offset;
+    if (nextIndex < total && !used.has(nextIndex)) {
+      return nextIndex;
+    }
+
+    const previousIndex = startIndex - offset;
+    if (previousIndex >= 0 && !used.has(previousIndex)) {
+      return previousIndex;
+    }
+  }
+
+  return null;
 }
 
 function countStationLineAppearances(lines: LineOption[]) {
