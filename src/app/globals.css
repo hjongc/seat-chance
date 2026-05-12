@@ -681,6 +681,17 @@ summary:focus-visible {
   margin: 8px 0 0;
 }
 
+.recommendation-meta {
+  color: var(--color-text);
+  font-weight: 800;
+}
+
+.recommendation-meta-subtle {
+  color: var(--color-text-soft);
+  font-size: var(--text-xs);
+  margin: 6px 0 0;
+}
+
 .context-label,
 .car-label {
   color: var(--color-text-soft);
@@ -688,20 +699,29 @@ summary:focus-visible {
   font-weight: 800;
 }
 
-.reason-pills {
-  display: flex;
-  flex-wrap: wrap;
+.reason-list {
+  display: grid;
   gap: 10px;
-  margin-top: 18px;
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
 }
 
-.reason-pill {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  padding: 8px 12px;
+.reason-item {
+  color: var(--color-text-soft);
+  display: grid;
+  font-size: var(--text-sm);
+  gap: 0;
+  grid-template-columns: 12px minmax(0, 1fr);
+  line-height: 1.45;
+}
+
+.reason-item::before {
+  color: var(--color-brand);
+  content: "•";
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(1px);
 }
 
 .recommendation-card {
@@ -895,16 +915,13 @@ summary:focus-visible {
   }
 
   .hero-title {
-    font-size: clamp(2.15rem, 9.8vw, 2.85rem);
-    max-width: 11ch;
+    font-size: clamp(1.6rem, 8vw, 2.35rem);
+    max-width: none;
+    line-height: 0.96;
   }
 
   .hero-title-line {
-    display: inline;
-  }
-
-  .hero-title-line + .hero-title-line::before {
-    content: " ";
+    display: block;
   }
 
   .hero-actions,
@@ -931,7 +948,8 @@ summary:focus-visible {
 
   .hero-meta,
   .status-note,
-  .support-note {
+  .support-note,
+  .reason-item {
     font-size: 13px;
     max-width: 100%;
   }

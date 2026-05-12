@@ -126,6 +126,51 @@ test("returns ranked seat turnover recommendations without probability wording",
   assert.doesNotMatch(JSON.stringify(result), /확률 \d+%/);
 });
 
+test("applies a meaningful penalty during heavier congestion windows", () => {
+  const congestedResult = recommendSeatPositions(
+    {
+      origin: "경복궁",
+      destination: "신사",
+      lineNo: "3",
+      direction: "오금",
+      dayType: "WEEKDAY",
+      timeSlot: "08:30",
+      mode: "seat"
+    },
+    dataset
+  );
+  const lighterDataset: SeatChanceDataset = {
+    ...dataset,
+    congestionProfiles: [
+      {
+        lineNo: "3",
+        direction: "오금",
+        dayType: "WEEKDAY",
+        timeSlot: "08:00",
+        congestionPct: 100,
+        source: "test fixture"
+      }
+    ]
+  };
+  const lighterResult = recommendSeatPositions(
+    {
+      origin: "경복궁",
+      destination: "신사",
+      lineNo: "3",
+      direction: "오금",
+      dayType: "WEEKDAY",
+      timeSlot: "08:30",
+      mode: "seat"
+    },
+    lighterDataset
+  );
+
+  assert.equal(congestedResult.recommendations[0].car_no, lighterResult.recommendations[0].car_no);
+  assert.equal(congestedResult.recommendations[0].door_no, lighterResult.recommendations[0].door_no);
+  assert.ok(lighterResult.recommendations[0].score - congestedResult.recommendations[0].score >= 8);
+  assert.ok(congestedResult.recommendations[0].score < 75);
+});
+
 test("describes exact and nearby door recommendations differently", () => {
   const doorDataset: SeatChanceDataset = {
     stations: ["출발", "환승역", "도착"].map((stationName, index) => ({
