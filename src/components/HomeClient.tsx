@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   CalendarDays,
-  ChevronRight,
   Clock3,
   MapPin,
   Search,
@@ -123,7 +122,6 @@ const dayTypeOptions: Array<{ value: DayType; label: string }> = [
   { value: "WEEKEND", label: "주말·공휴일" }
 ];
 const emptyComboOptions: ComboOption[] = [];
-const previewDoors = ["1-2", "2-2", "3-2", "4-2", "5-2"];
 
 export function HomeClient() {
   const [lineOptions, setLineOptions] = useState<LineOption[]>([]);
@@ -230,45 +228,6 @@ export function HomeClient() {
             ? "서로 다른 역을 선택하면 방향이 자동으로 계산됩니다."
             : `${directionSummary} 기준 ${formatDayType(dayType)} ${formatTimeRange(timeSlot)} 추천을 준비했습니다.`;
 
-  const heroMetrics: MetricItem[] = [
-    {
-      label: "추천 단위",
-      value: "칸·문",
-      detail: "열차 안에서 바로 찾을 수 있는 수준까지 안내",
-      tone: "accent"
-    },
-    {
-      label: "빠른 선택",
-      value: lineNo ? `${featuredStationComboOptions.length}개` : "대표 역",
-      detail: lineNo ? "환승역과 종점 우선" : "노선을 고르면 주요 역을 먼저 노출",
-      tone: "success"
-    },
-    {
-      label: "시간 해상도",
-      value: "30분",
-      detail: `${formatDayType(dayType)} ${formatTimeRange(timeSlot)} 기준`
-    }
-  ];
-
-  const supportMetrics: MetricItem[] = [
-    {
-      label: "지원 노선",
-      value: lineLoading ? "확인 중" : `${lineOptions.length}개`,
-      detail: "배포된 정적 노선 데이터 기준"
-    },
-    {
-      label: "현재 선택",
-      value: lineNo ? lineDisplayLabel(lineNo) : "대기 중",
-      detail: lineNo ? `${stations.length}개 역` : "호선을 고르면 역 검색이 열립니다.",
-      tone: lineNo ? "accent" : undefined
-    },
-    {
-      label: "탑승 방향",
-      value: direction ? directionLabel(lineNo, direction) : "자동 계산 대기",
-      detail: direction ? `${origin} → ${destination}` : "승차역과 하차역 선택 후 계산"
-    }
-  ];
-
   function applyStations(nextStations: StationOption[]) {
     setStations(nextStations);
     setOrigin("");
@@ -345,22 +304,13 @@ export function HomeClient() {
             <span>Seat Chance</span>
           </span>
         </a>
-
-        <div className="header-actions">
-          <span className="status-chip status-chip-muted">{lineLoading ? "노선 동기화 중" : `${lineOptions.length}개 노선 준비`}</span>
-          <a className="text-link" href="#seat-search">
-            검색 열기
-            <ChevronRight size={14} aria-hidden="true" />
-          </a>
-        </div>
       </header>
 
-      <section className="hero-grid" aria-labelledby="app-title">
+      <section className="hero-shell" aria-labelledby="app-title">
         <div className="hero-copy">
           <p className="eyebrow">Seoul Metro Seat Planner</p>
           <h1 className="hero-title" id="app-title">
             서서 기다리는 시간을
-            <br />
             앉을 가능성으로 바꿉니다.
           </h1>
           <p className="hero-lede">
@@ -372,50 +322,20 @@ export function HomeClient() {
               <Search size={18} aria-hidden="true" />
               추천 시작
             </a>
-            <p className="hero-caption">{readinessMessage}</p>
           </div>
 
-          <MetricGrid compact items={heroMetrics} />
+          <p className="hero-meta">
+            {lineLoading ? "노선 데이터를 확인하는 중입니다." : `${lineOptions.length}개 노선을 바로 검색할 수 있습니다.`}
+            {" · "}
+            {direction ? directionSummary : "방향은 승차역과 하차역을 고르면 자동으로 계산됩니다."}
+          </p>
         </div>
-
-        <aside className="hero-panel product-panel" aria-label="서비스 미리보기">
-          <div className="hero-panel-top">
-            <div>
-              <p className="eyebrow">How It Works</p>
-              <h2>탑승 전에 보는 승차 전략</h2>
-              <p>노선 선택부터 결과 비교까지, 이동 중에도 읽기 쉽게 정리합니다.</p>
-            </div>
-            <span className="status-chip">칸·문 단위 추천</span>
-          </div>
-
-          <div className="hero-preview" aria-hidden="true">
-            <div className="preview-line" />
-            <div className="preview-rail">
-              {previewDoors.map((door, index) => (
-                <div className={index === 2 ? "preview-car preview-car-active" : "preview-car"} key={door}>
-                  <span>{door}</span>
-                  <strong>{index === 2 ? "1순위" : `${index + 2}순위`}</strong>
-                </div>
-              ))}
-            </div>
-            <div className="preview-card">
-              <p>예시 결과</p>
-              <strong>3-2 문</strong>
-              <span>하차 흐름과 승차 분산이 만나는 구간</span>
-            </div>
-          </div>
-
-          <ul className="signal-list">
-            <li>승차역과 하차역 순서를 읽어 방향을 자동 계산합니다.</li>
-            <li>추천 결과는 1순위와 대안 위치를 함께 보여줍니다.</li>
-            <li>열차 배치를 펼쳐 칸별 위치를 다시 확인할 수 있습니다.</li>
-          </ul>
-        </aside>
       </section>
 
-      <section className="workspace-grid">
+      <section className="search-shell">
         <form className="product-panel search-panel" id="seat-search" aria-labelledby="seat-search-title" onSubmit={handleSubmit}>
           <PanelHeading
+            id="seat-search-title"
             eyebrow="Search"
             title="지금 탈 구간을 입력하세요"
             description="노선, 역, 시간만 고르면 칸과 문 위치를 바로 제안합니다."
@@ -423,7 +343,7 @@ export function HomeClient() {
           />
 
           <div className="search-grid">
-            <label className="field">
+            <label className="field field-line">
               <span>
                 <TrainFront size={16} aria-hidden="true" />
                 호선
@@ -437,7 +357,7 @@ export function HomeClient() {
               />
             </label>
 
-            <label className="field">
+            <label className="field field-origin">
               <span>
                 <MapPin size={16} aria-hidden="true" />
                 승차역
@@ -452,7 +372,7 @@ export function HomeClient() {
               />
             </label>
 
-            <label className="field">
+            <label className="field field-destination">
               <span>
                 <MapPin size={16} aria-hidden="true" />
                 하차역
@@ -467,7 +387,7 @@ export function HomeClient() {
               />
             </label>
 
-            <label className="field">
+            <label className="field field-day">
               <span>
                 <CalendarDays size={16} aria-hidden="true" />
                 요일 유형
@@ -486,7 +406,7 @@ export function HomeClient() {
               </div>
             </label>
 
-            <label className="field">
+            <label className="field field-time">
               <span>
                 <Clock3 size={16} aria-hidden="true" />
                 출발 시간
@@ -501,10 +421,7 @@ export function HomeClient() {
           </div>
 
           <div className="search-footer">
-            <div className="status-note" aria-live="polite">
-              <span className="status-note-label">현재 상태</span>
-              <p>{readinessMessage}</p>
-            </div>
+            <p className="status-note" aria-live="polite">{readinessMessage}</p>
 
             <button className="primary-action" type="submit" disabled={!canSubmit}>
               <Search size={18} aria-hidden="true" />
@@ -512,37 +429,6 @@ export function HomeClient() {
             </button>
           </div>
         </form>
-
-        <aside className="product-panel context-panel" aria-label="추천 기준 안내">
-          <PanelHeading
-            eyebrow="Guide"
-            title="추천 기준"
-            description="정보를 덜 보여주는 대신, 검색 직전에 필요한 기준만 남겼습니다."
-          />
-
-          <MetricGrid items={supportMetrics} />
-
-          <div className="support-stack">
-            <article className="context-card">
-              <p className="context-label">빠른 선택</p>
-              <strong>{lineNo ? `${featuredStationComboOptions.length}개 후보` : "노선 선택 대기"}</strong>
-              <p>
-                {lineNo
-                  ? "환승역, 종점, 주요 역을 먼저 보여줘 모바일 검색 시간을 줄입니다."
-                  : "노선을 선택하면 추천 가능성이 높은 대표 역을 먼저 노출합니다."}
-              </p>
-            </article>
-
-            <article className="context-card">
-              <p className="context-label">검색 흐름</p>
-              <ul className="context-list">
-                <li>1. 호선을 선택합니다.</li>
-                <li>2. 승차역과 하차역을 고릅니다.</li>
-                <li>3. 요일 유형과 출발 시간을 맞춘 뒤 결과를 확인합니다.</li>
-              </ul>
-            </article>
-          </div>
-        </aside>
       </section>
 
       {error ? (
@@ -559,7 +445,7 @@ export function HomeClient() {
           <TrainFront size={22} aria-hidden="true" />
           <div className="empty-state-copy">
             <h2>검색 결과는 여기에서 보여줍니다.</h2>
-            <p>호선과 역을 먼저 선택하면, 가장 유리한 칸과 문 위치를 1순위부터 정리합니다.</p>
+            <p>호선과 역을 먼저 선택하면 가장 유리한 칸과 문 위치를 1순위부터 정리합니다.</p>
           </div>
         </section>
       ) : null}
@@ -614,50 +500,38 @@ function ResultView({
         </span>
       </div>
 
-      <div className="result-hero-grid">
-        <article className="product-panel spotlight-panel">
-          <div className="spotlight-top">
-            <span className="rank-badge">1위 추천</span>
-            <span className={`grade grade-${leadRecommendation.grade.toLowerCase()}`}>{leadRecommendation.grade}</span>
+      <article className="product-panel spotlight-panel">
+        <div className="spotlight-top">
+          <span className="rank-badge">1위 추천</span>
+          <span className={`grade grade-${leadRecommendation.grade.toLowerCase()}`}>{leadRecommendation.grade}</span>
+        </div>
+        <p className="spotlight-route">{directionLabel(recommendation.line_no, recommendation.direction)} 방향</p>
+        <h3 className="spotlight-door">
+          {leadRecommendation.car_no}-{leadRecommendation.door_no} 문
+        </h3>
+        <p className="spotlight-summary">예상 기회 구간 {leadRecommendation.expected_seat_window}</p>
+
+        <MetricGrid compact items={resultMetrics} />
+
+        <div className="reason-pills">
+          {leadRecommendation.reasons.map((reason) => (
+            <span className="reason-pill" key={reason}>
+              {reason}
+            </span>
+          ))}
+        </div>
+
+        {recommendation.cautions.length > 0 ? (
+          <div className="caution-block">
+            <p className="context-label">참고사항</p>
+            <ul className="caution-list">
+              {recommendation.cautions.map((caution) => (
+                <li key={caution}>{caution}</li>
+              ))}
+            </ul>
           </div>
-          <p className="spotlight-route">{directionLabel(recommendation.line_no, recommendation.direction)} 방향</p>
-          <h3 className="spotlight-door">
-            {leadRecommendation.car_no}-{leadRecommendation.door_no} 문
-          </h3>
-          <p className="spotlight-summary">예상 기회 구간 {leadRecommendation.expected_seat_window}</p>
-
-          <MetricGrid compact items={resultMetrics} />
-
-          <div className="reason-pills">
-            {leadRecommendation.reasons.map((reason) => (
-              <span className="reason-pill" key={reason}>
-                {reason}
-              </span>
-            ))}
-          </div>
-        </article>
-
-        <aside className="product-panel summary-panel">
-          <PanelHeading
-            eyebrow="Summary"
-            title="이번 검색 요약"
-            description="탑승 직전 판단할 수 있게 핵심 정보만 다시 묶었습니다."
-          />
-
-          <MetricGrid items={resultMetrics} />
-
-          {recommendation.cautions.length > 0 ? (
-            <div className="caution-block">
-              <p className="context-label">참고사항</p>
-              <ul className="caution-list">
-                {recommendation.cautions.map((caution) => (
-                  <li key={caution}>{caution}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </aside>
-      </div>
+        ) : null}
+      </article>
 
       {alternativeRecommendations.length > 0 ? (
         <div className="alternatives-grid">
@@ -667,8 +541,8 @@ function ResultView({
         </div>
       ) : null}
 
-      <details className="product-panel result-details" open>
-        <summary>열차 위치와 칸별 추천 펼쳐 보기</summary>
+      <details className="product-panel result-details">
+        <summary>전체 열차 위치 보기</summary>
         <div className="details-body">
           <TrainLayout layout={layout} recommendations={recommendation.recommendations} />
         </div>
@@ -760,11 +634,13 @@ function TrainLayout({
 }
 
 function PanelHeading({
+  id,
   eyebrow,
   title,
   description,
   aside
 }: {
+  id?: string;
   eyebrow: string;
   title: string;
   description: string;
@@ -774,7 +650,7 @@ function PanelHeading({
     <div className="panel-heading">
       <div className="panel-heading-copy">
         <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
+        <h2 id={id}>{title}</h2>
         <p>{description}</p>
       </div>
       {aside ? <div className="panel-trailing">{aside}</div> : null}
