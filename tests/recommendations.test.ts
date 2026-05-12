@@ -246,7 +246,188 @@ test("describes exact and nearby door recommendations differently", () => {
   assert.match(exactDoor!.reasons[0], /직접 맞아/);
   assert.match(nearbyDoor!.reasons[0], /한 문 거리/);
   assert.notEqual(exactDoor!.reasons[0], nearbyDoor!.reasons[0]);
+  assert.ok(exactDoor!.score - nearbyDoor!.score >= 8);
   assert.doesNotMatch(JSON.stringify(result.recommendations), /좌석각이 생길/);
+});
+
+test("weights earlier seat opportunities above equally strong later ones", () => {
+  const timingDataset: SeatChanceDataset = {
+    stations: ["출발", "이른기회역", "늦은기회역", "도착"].map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "7",
+      stationCode: `L7-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "7",
+        branchCode: "MAIN",
+        direction: "도착",
+        carCount: 2,
+        doorsPerCar: 1,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: ["이른기회역", "늦은기회역"].map((stationName) => ({
+      lineNo: "7",
+      stationName,
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: 200,
+      alightings: 4000,
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "7",
+        stationName: "이른기회역",
+        direction: "도착",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "7",
+        stationName: "늦은기회역",
+        direction: "도착",
+        carNo: 2,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "출발",
+      destination: "도착",
+      lineNo: "7",
+      direction: "도착",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    timingDataset
+  );
+
+  assert.equal(result.recommendations[0].car_no, 1);
+  assert.equal(result.recommendations[0].door_no, 1);
+  assert.equal(result.recommendations[1].car_no, 2);
+  assert.equal(result.recommendations[1].door_no, 1);
+  assert.ok(result.recommendations[0].score > result.recommendations[1].score);
+});
+
+test("adds multiple station opportunities onto the same door", () => {
+  const additiveDataset: SeatChanceDataset = {
+    stations: ["출발", "첫기회역", "둘째기회역", "대안역", "도착"].map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "9",
+      stationCode: `L9-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "9",
+        branchCode: "MAIN",
+        direction: "도착",
+        carCount: 2,
+        doorsPerCar: 1,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: ["첫기회역", "둘째기회역", "대안역"].map((stationName) => ({
+      lineNo: "9",
+      stationName,
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: 300,
+      alightings: 3200,
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "첫기회역",
+        direction: "도착",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "둘째기회역",
+        direction: "도착",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "대안역",
+        direction: "도착",
+        carNo: 2,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "출발",
+      destination: "도착",
+      lineNo: "9",
+      direction: "도착",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    additiveDataset
+  );
+
+  assert.equal(result.recommendations[0].car_no, 1);
+  assert.equal(result.recommendations[0].door_no, 1);
+  assert.equal(result.recommendations[1].car_no, 2);
+  assert.equal(result.recommendations[1].door_no, 1);
+  assert.ok(result.recommendations[0].score > result.recommendations[1].score);
 });
 
 test("rounds departure time up to the next half-hour slot", () => {

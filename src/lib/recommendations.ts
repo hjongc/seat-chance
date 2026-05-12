@@ -250,11 +250,8 @@ function scoreCandidate({
       continue;
     }
 
-    const progress = (index + 1) / totalStops;
     const stationsAfter = totalStops - index - 1;
-    const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
-    const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
-    const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
+    const distanceWeight = opportunityDistanceWeight(stationsAfter, totalStops);
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
@@ -281,7 +278,7 @@ function scoreCandidate({
     const hintDistanceFactor = matchingHint
       ? matchingHint.distance === 0
         ? 1
-        : 0.9
+        : 0.8
       : 0;
     const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight * crowdingFactor;
     const hintDemand = matchingHint?.hint.kind === "transfer"
@@ -388,6 +385,15 @@ function getCongestionPenalty(profile: CongestionProfile | undefined): number {
     return 3;
   }
   return clamp((profile.congestionPct - 100) * 0.28, 0, 22);
+}
+
+function opportunityDistanceWeight(stationsAfter: number, totalStops: number) {
+  if (totalStops <= 0) {
+    return 1;
+  }
+
+  const remainingRatio = stationsAfter / totalStops;
+  return clamp(0.32 + Math.pow(remainingRatio, 0.65) * 0.68, 0.25, 1);
 }
 
 function stationCrowdingFactor(congestionPct: number): number {
