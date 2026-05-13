@@ -371,9 +371,10 @@ async function ingestTransferDoors() {
 
   for (const row of rows) {
     const startLineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
+    const endStationCode = stringValue(pick(row, ["환승종료 코드", "end_station_code", "환승종료역"]));
     const endLineNo =
       normalizeLineNo(pick(row, ["환승종료 호선", "환승 종료 호선", "end_line_no"])) ||
-      lineNoFromStationCode(pick(row, ["환승종료역", "환승종료 코드", "end_station_code"]));
+      lineNoFromStationCode(endStationCode);
     const stationName = normalizeStationName(pick(row, ["환승시작역", "station_name", "STATION_NM"]));
     const source = sourceUrl("TRANSFER") ?? "configured transfer source";
 
@@ -403,9 +404,11 @@ async function ingestTransferDoors() {
     }
 
     if (endLineNo === targetLineNo) {
+      const boardingStationName = await transferEndStationName(row, endStationCode);
       const rawDirection = pick(row, ["환승 열차 방면", "환승열차방면", "boarding_direction", "BOARDING_DIRECTION"]);
       const direction =
-        (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
+        (await normalizeDirection(rawDirection)) ||
+        (await inferDirectionFromStationText(boardingStationName, rawDirection));
       const carNo = intValue(
         pick(row, ["환승 승차위치(호차)", "환승 승차위치 호차", "boarding_car_no", "BOARDING_CAR_NO"])
       );
@@ -413,10 +416,10 @@ async function ingestTransferDoors() {
         pick(row, ["환승 승차위치(문)", "환승 승차위치 문", "boarding_door_no", "BOARDING_DOOR_NO"])
       );
 
-      if (direction && carNo && doorNo) {
+      if (boardingStationName && direction && carNo && doorNo) {
         await upsertDoorHint(
           "transfer_boarding_door",
-          stationName,
+          boardingStationName,
           direction,
           carNo,
           doorNo,
@@ -433,6 +436,41 @@ async function ingestTransferDoors() {
   }
 
   return count;
+}
+
+async function transferEndStationName(row, stationCode) {
+  const explicitName = normalizeStationName(
+    pick(row, ["환승종료역명", "환승 종료역", "환승종료역사", "end_station_name", "END_STATION_NM"])
+  );
+  if (explicitName) {
+    return explicitName;
+  }
+
+  const endStationValue = stringValue(pick(row, ["환승종료역"]));
+  if (endStationValue && !/^\d+$/.test(endStationValue)) {
+    return normalizeStationName(endStationValue);
+  }
+
+  return (await stationNameByLineAndCode(targetLineNo, stationCode)) || normalizeStationName(endStationValue);
+}
+
+async function stationNameByLineAndCode(lineNo, stationCode) {
+  if (!stationCode) {
+    return "";
+  }
+
+  const result = await client.query(
+    `
+      select station_name
+      from station_line_order
+      where line_no = $1
+        and station_code = $2
+      limit 1
+    `,
+    [lineNo, stationCode]
+  );
+
+  return normalizeStationName(result.rows[0]?.station_name);
 }
 
 async function upsertDoorHint(tableName, stationName, direction, carNo, doorNo, description, source) {
