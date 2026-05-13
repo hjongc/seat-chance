@@ -728,10 +728,7 @@ test("carries transfer boardings into later competition", () => {
         validTo: null
       }
     ],
-    ridershipProfiles: [
-      ["승차경쟁역", 1800, 0],
-      ["순하차환승역", 100, 4200]
-    ].map(([stationName, boardings, alightings]) => ({
+    ridershipProfiles: [["순하차환승역", 100, 4200]].map(([stationName, boardings, alightings]) => ({
       lineNo: "5",
       stationName: String(stationName),
       dayType: "WEEKDAY",

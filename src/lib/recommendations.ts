@@ -247,7 +247,8 @@ function scoreCandidate({
 
   for (const [index, station] of intermediateStations.entries()) {
     const profile = profileByStation.get(station.stationName);
-    if (!profile) {
+    const transferProfile = transferDemandByStation.get(station.stationName);
+    if (!profile && !transferProfile) {
       continue;
     }
 
@@ -256,7 +257,6 @@ function scoreCandidate({
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
-    const transferProfile = transferDemandByStation.get(station.stationName);
     const transferIntensity = transferProfile
       ? transferIntensityScore(transferProfile.transferPassengers, maxTransferPassengers)
       : 0;

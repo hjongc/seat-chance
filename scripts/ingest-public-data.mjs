@@ -367,22 +367,19 @@ async function ingestTransferDemandProfiles() {
 
 async function ingestTransferDoors() {
   const rows = await fetchConfiguredRows("TRANSFER");
+  await client.query("delete from transfer_boarding_door where line_no = $1", [targetLineNo]);
   let count = 0;
 
   for (const row of rows) {
     const startLineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
-    const endStationCode = stringValue(pick(row, ["환승종료 코드", "end_station_code", "환승종료역"]));
+    const endStationCode = transferEndStationCode(row);
     const endLineNo =
       normalizeLineNo(pick(row, ["환승종료 호선", "환승 종료 호선", "end_line_no"])) ||
       lineNoFromStationCode(endStationCode);
     const stationName = normalizeStationName(pick(row, ["환승시작역", "station_name", "STATION_NM"]));
     const source = sourceUrl("TRANSFER") ?? "configured transfer source";
 
-    if (!stationName) {
-      continue;
-    }
-
-    if (startLineNo === targetLineNo) {
+    if (startLineNo === targetLineNo && stationName) {
       const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
       const direction =
         (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
@@ -438,6 +435,16 @@ async function ingestTransferDoors() {
   return count;
 }
 
+function transferEndStationCode(row) {
+  const explicitCode = stringValue(pick(row, ["환승종료 코드", "end_station_code"]));
+  if (explicitCode) {
+    return explicitCode;
+  }
+
+  const stationValue = stringValue(pick(row, ["환승종료역"]));
+  return /^\d+$/.test(stationValue) ? stationValue : "";
+}
+
 async function transferEndStationName(row, stationCode) {
   const explicitName = normalizeStationName(
     pick(row, ["환승종료역명", "환승 종료역", "환승종료역사", "end_station_name", "END_STATION_NM"])
@@ -451,7 +458,7 @@ async function transferEndStationName(row, stationCode) {
     return normalizeStationName(endStationValue);
   }
 
-  return (await stationNameByLineAndCode(targetLineNo, stationCode)) || normalizeStationName(endStationValue);
+  return stationNameByLineAndCode(targetLineNo, stationCode);
 }
 
 async function stationNameByLineAndCode(lineNo, stationCode) {
@@ -463,11 +470,12 @@ async function stationNameByLineAndCode(lineNo, stationCode) {
     `
       select station_name
       from station_line_order
-      where line_no = $1
-        and station_code = $2
+      where operator = $1
+        and line_no = $2
+        and station_code = $3
       limit 1
     `,
-    [lineNo, stationCode]
+    [operator, lineNo, stationCode]
   );
 
   return normalizeStationName(result.rows[0]?.station_name);
