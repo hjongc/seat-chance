@@ -66,6 +66,8 @@ create table if not exists transfer_demand_profile (
   station_name text not null,
   day_type text not null check (day_type in ('WEEKDAY', 'WEEKEND')),
   transfer_passengers integer not null check (transfer_passengers >= 0),
+  transfer_alightings integer not null default 0 check (transfer_alightings >= 0),
+  transfer_boardings integer not null default 0 check (transfer_boardings >= 0),
   source text not null,
   observed_on date not null,
   ingested_at timestamptz not null default now(),
@@ -73,6 +75,19 @@ create table if not exists transfer_demand_profile (
 );
 
 create table if not exists transfer_door (
+  line_no text not null,
+  station_name text not null,
+  direction_code text not null,
+  car_no integer not null check (car_no > 0),
+  door_no integer not null check (door_no > 0),
+  weight numeric(4, 3) not null check (weight >= 0 and weight <= 1),
+  description text not null,
+  source text not null,
+  confidence numeric(3, 2) not null check (confidence >= 0 and confidence <= 1),
+  primary key (line_no, station_name, direction_code, car_no, door_no)
+);
+
+create table if not exists transfer_boarding_door (
   line_no text not null,
   station_name text not null,
   direction_code text not null,
@@ -130,8 +145,17 @@ create index if not exists station_congestion_profile_lookup_idx
 create index if not exists transfer_demand_profile_lookup_idx
   on transfer_demand_profile (line_no, day_type, observed_on desc);
 
+alter table transfer_demand_profile
+  add column if not exists transfer_alightings integer not null default 0 check (transfer_alightings >= 0);
+
+alter table transfer_demand_profile
+  add column if not exists transfer_boardings integer not null default 0 check (transfer_boardings >= 0);
+
 create index if not exists transfer_door_lookup_idx
   on transfer_door (line_no, station_name, direction_code);
+
+create index if not exists transfer_boarding_door_lookup_idx
+  on transfer_boarding_door (line_no, station_name, direction_code);
 
 create index if not exists facility_door_lookup_idx
   on exit_or_facility_door (line_no, station_name, direction_code);

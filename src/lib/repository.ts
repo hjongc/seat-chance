@@ -8,6 +8,11 @@ import type {
   TrainLayout
 } from "./types";
 
+type LegacyTransferDemandProfile = Omit<
+  SeatChanceDataset["transferDemandProfiles"][number],
+  "transferAlightings" | "transferBoardings"
+>;
+
 export type DataStatusCode =
   | "READY"
   | "MISSING_DATABASE_URL"
@@ -66,7 +71,7 @@ const requiredTables = [
   "exit_or_facility_door"
 ] as const;
 
-const optionalTables = ["station_congestion_profile", "transfer_demand_profile"] as const;
+const optionalTables = ["station_congestion_profile", "transfer_demand_profile", "transfer_boarding_door"] as const;
 const statusTables = [...requiredTables, ...optionalTables] as const;
 
 class PostgresSeatChanceRepository implements SeatChanceRepository {
@@ -268,38 +273,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
         ),
         this.getStationCongestionProfiles(lineNo, direction, dayType),
         this.getTransferDemandProfiles(lineNo, dayType),
-        this.pool.query<DoorHint>(
-          `
-            select
-              'transfer' as kind,
-              line_no as "lineNo",
-              station_name as "stationName",
-              direction_code as "direction",
-              car_no as "carNo",
-              door_no as "doorNo",
-              weight::float as weight,
-              description,
-              source,
-              confidence::float as confidence
-            from transfer_door
-            where line_no = $1 and direction_code = $2
-            union all
-            select
-              'facility' as kind,
-              line_no as "lineNo",
-              station_name as "stationName",
-              direction_code as "direction",
-              car_no as "carNo",
-              door_no as "doorNo",
-              weight::float as weight,
-              description,
-              source,
-              confidence::float as confidence
-            from exit_or_facility_door
-            where line_no = $1 and direction_code = $2
-          `,
-          [lineNo, direction]
-        )
+        this.getDoorHints(lineNo, direction)
       ]);
 
     return {
@@ -311,6 +285,97 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       transferDemandProfiles,
       doorHints: doorHints.rows
     };
+  }
+
+  private async getDoorHints(lineNo: string, direction: DirectionCode): Promise<{ rows: DoorHint[] }> {
+    try {
+      return await this.pool.query<DoorHint>(
+        `
+          select
+            'transfer' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from transfer_door
+          where line_no = $1 and direction_code = $2
+          union all
+          select
+            'transfer_boarding' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from transfer_boarding_door
+          where line_no = $1 and direction_code = $2
+          union all
+          select
+            'facility' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from exit_or_facility_door
+          where line_no = $1 and direction_code = $2
+        `,
+        [lineNo, direction]
+      );
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return this.getLegacyDoorHints(lineNo, direction);
+      }
+      throw error;
+    }
+  }
+
+  private async getLegacyDoorHints(lineNo: string, direction: DirectionCode): Promise<{ rows: DoorHint[] }> {
+    return this.pool.query<DoorHint>(
+      `
+        select
+          'transfer' as kind,
+          line_no as "lineNo",
+          station_name as "stationName",
+          direction_code as "direction",
+          car_no as "carNo",
+          door_no as "doorNo",
+          weight::float as weight,
+          description,
+          source,
+          confidence::float as confidence
+        from transfer_door
+        where line_no = $1 and direction_code = $2
+        union all
+        select
+          'facility' as kind,
+          line_no as "lineNo",
+          station_name as "stationName",
+          direction_code as "direction",
+          car_no as "carNo",
+          door_no as "doorNo",
+          weight::float as weight,
+          description,
+          source,
+          confidence::float as confidence
+        from exit_or_facility_door
+        where line_no = $1 and direction_code = $2
+      `,
+      [lineNo, direction]
+    );
   }
 
   private async getStationCongestionProfiles(
@@ -358,6 +423,8 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
             station_name as "stationName",
             day_type as "dayType",
             transfer_passengers as "transferPassengers",
+            transfer_alightings as "transferAlightings",
+            transfer_boardings as "transferBoardings",
             source,
             observed_on::text as "observedOn"
           from transfer_demand_profile
@@ -373,8 +440,39 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       if (isUndefinedTableError(error)) {
         return [];
       }
+      if (isUndefinedColumnError(error)) {
+        return this.getLegacyTransferDemandProfiles(lineNo, dayType);
+      }
       throw error;
     }
+  }
+
+  private async getLegacyTransferDemandProfiles(
+    lineNo: string,
+    dayType: DayType
+  ): Promise<SeatChanceDataset["transferDemandProfiles"]> {
+    const result = await this.pool.query<LegacyTransferDemandProfile>(
+      `
+        select distinct on (line_no, station_name, day_type)
+          line_no as "lineNo",
+          station_name as "stationName",
+          day_type as "dayType",
+          transfer_passengers as "transferPassengers",
+          source,
+          observed_on::text as "observedOn"
+        from transfer_demand_profile
+        where line_no = $1
+          and day_type = $2
+        order by line_no, station_name, day_type, observed_on desc
+      `,
+      [lineNo, dayType]
+    );
+
+    return result.rows.map((profile) => ({
+      ...profile,
+      transferAlightings: 0,
+      transferBoardings: 0
+    }));
   }
 }
 
@@ -513,6 +611,15 @@ function isUndefinedTableError(error: unknown) {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "42P01"
+  );
+}
+
+function isUndefinedColumnError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "42703"
   );
 }
 

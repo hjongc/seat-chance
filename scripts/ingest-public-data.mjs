@@ -304,12 +304,40 @@ async function ingestTransferDemandProfiles() {
   let count = 0;
 
   for (const row of rows) {
+    const rowLineNo = normalizeLineNo(pick(row, ["호선", "해당호선", "LINE_NUM", "line_no", "lineNo"]));
+    if (rowLineNo && rowLineNo !== targetLineNo) {
+      continue;
+    }
+
     const stationName = normalizeStationName(
       pick(row, ["역명", "출발역명", "환승역사 역명", "환승역사", "station_name", "STATION_NM", "stationName"])
     );
     if (!stationName || !targetStationNames.has(stationName)) {
       continue;
     }
+
+    const transferAlightings = intValue(
+      pick(row, [
+        "일평균환승유입인원",
+        "일평균 환승유입인원",
+        "환승유입인원수",
+        "환승유입인원",
+        "transfer_alightings",
+        "transferAlightings"
+      ])
+    );
+    const transferBoardings = intValue(
+      pick(row, [
+        "일평균환승유출인원",
+        "일평균 환승유출인원",
+        "환승유출인원수",
+        "환승유출인원",
+        "환승승차인원",
+        "transfer_boardings",
+        "transferBoardings"
+      ])
+    );
+    const directionalPassengers = transferAlightings + transferBoardings;
 
     const weekdayPassengers = intValue(
       pick(row, [
@@ -330,8 +358,8 @@ async function ingestTransferDemandProfiles() {
     const weekendPassengers = averagePositive([saturdayPassengers, sundayPassengers]);
 
     for (const [dayType, passengers] of [
-      ["WEEKDAY", weekdayPassengers],
-      ["WEEKEND", weekendPassengers]
+      ["WEEKDAY", Math.max(weekdayPassengers, directionalPassengers)],
+      ["WEEKEND", Math.max(weekendPassengers, directionalPassengers)]
     ]) {
       if (passengers <= 0) {
         continue;
@@ -340,14 +368,17 @@ async function ingestTransferDemandProfiles() {
       await client.query(
         `
           insert into transfer_demand_profile (
-            line_no, station_name, day_type, transfer_passengers, source, observed_on
-          ) values ($1, $2, $3, $4, $5, $6)
+            line_no, station_name, day_type, transfer_passengers,
+            transfer_alightings, transfer_boardings, source, observed_on
+          ) values ($1, $2, $3, $4, $5, $6, $7, $8)
           on conflict (line_no, station_name, day_type, observed_on) do update set
             transfer_passengers = excluded.transfer_passengers,
+            transfer_alightings = excluded.transfer_alightings,
+            transfer_boardings = excluded.transfer_boardings,
             source = excluded.source,
             ingested_at = now()
         `,
-        [targetLineNo, stationName, dayType, passengers, source, observedOn]
+        [targetLineNo, stationName, dayType, passengers, transferAlightings, transferBoardings, source, observedOn]
       );
       count += 1;
     }
@@ -365,39 +396,62 @@ async function ingestTransferDoors() {
   let count = 0;
 
   for (const row of rows) {
-    const lineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
+    const startLineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
+    const endLineNo =
+      normalizeLineNo(pick(row, ["환승종료 호선", "환승 종료 호선", "end_line_no"])) ||
+      lineNoFromStationCode(pick(row, ["환승종료역", "환승종료 코드", "end_station_code"]));
     const stationName = normalizeStationName(pick(row, ["환승시작역", "station_name", "STATION_NM"]));
-    const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
-    const direction = (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
-    const carNo = intValue(pick(row, ["하차위치(호차)", "하차위치 호차", "car_no", "CAR_NO"]));
-    const doorNo = intValue(pick(row, ["하차위치(문)", "하차위치 문", "door_no", "DOOR_NO"]));
+    const source = sourceUrl("TRANSFER") ?? "configured transfer source";
 
-    if (lineNo !== targetLineNo || !direction || !stationName || !carNo || !doorNo) {
+    if (!stationName) {
       continue;
     }
 
-    await client.query(
-      `
-        insert into transfer_door (
-          line_no, station_name, direction_code, car_no, door_no, weight, description, source, confidence
-        ) values ($1, $2, $3, $4, $5, 1.000, $6, $7, 0.80)
-        on conflict (line_no, station_name, direction_code, car_no, door_no) do update set
-          weight = excluded.weight,
-          description = excluded.description,
-          source = excluded.source,
-          confidence = excluded.confidence
-      `,
-      [
-        targetLineNo,
-        stationName,
-        direction,
-        carNo,
-        doorNo,
-        "공공 환승정보의 최단 환승 하차문",
-        sourceUrl("TRANSFER") ?? "configured transfer source"
-      ]
-    );
-    count += 1;
+    if (startLineNo === targetLineNo) {
+      const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
+      const direction =
+        (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
+      const carNo = intValue(pick(row, ["하차위치(호차)", "하차위치 호차", "car_no", "CAR_NO"]));
+      const doorNo = intValue(pick(row, ["하차위치(문)", "하차위치 문", "door_no", "DOOR_NO"]));
+
+      if (direction && carNo && doorNo) {
+        await upsertDoorHint(
+          "transfer_door",
+          stationName,
+          direction,
+          carNo,
+          doorNo,
+          "공공 환승정보의 최단 환승 하차문",
+          source
+        );
+        count += 1;
+      }
+    }
+
+    if (endLineNo === targetLineNo) {
+      const rawDirection = pick(row, ["환승 열차 방면", "환승열차방면", "boarding_direction", "BOARDING_DIRECTION"]);
+      const direction =
+        (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
+      const carNo = intValue(
+        pick(row, ["환승 승차위치(호차)", "환승 승차위치 호차", "boarding_car_no", "BOARDING_CAR_NO"])
+      );
+      const doorNo = intValue(
+        pick(row, ["환승 승차위치(문)", "환승 승차위치 문", "boarding_door_no", "BOARDING_DOOR_NO"])
+      );
+
+      if (direction && carNo && doorNo) {
+        await upsertDoorHint(
+          "transfer_boarding_door",
+          stationName,
+          direction,
+          carNo,
+          doorNo,
+          "공공 환승정보의 환승 승차문",
+          source
+        );
+        count += 1;
+      }
+    }
   }
 
   if (count === 0) {
@@ -405,6 +459,22 @@ async function ingestTransferDoors() {
   }
 
   return count;
+}
+
+async function upsertDoorHint(tableName, stationName, direction, carNo, doorNo, description, source) {
+  await client.query(
+    `
+      insert into ${tableName} (
+        line_no, station_name, direction_code, car_no, door_no, weight, description, source, confidence
+      ) values ($1, $2, $3, $4, $5, 1.000, $6, $7, 0.80)
+      on conflict (line_no, station_name, direction_code, car_no, door_no) do update set
+        weight = excluded.weight,
+        description = excluded.description,
+        source = excluded.source,
+        confidence = excluded.confidence
+    `,
+    [targetLineNo, stationName, direction, carNo, doorNo, description, source]
+  );
 }
 
 async function ingestFastExitDoors() {
@@ -1003,6 +1073,17 @@ function normalizeLineNo(value) {
       .trim();
   }
   return String(Number(match[0]));
+}
+
+function lineNoFromStationCode(value) {
+  const digits = stringValue(value).replace(/\D/g, "");
+  if (digits.length === 3) {
+    return String(Number(digits.slice(0, 1)));
+  }
+  if (digits.length < 4) {
+    return "";
+  }
+  return String(Number(digits.slice(0, 2)));
 }
 
 function lineLabel(lineNo) {

@@ -1,7 +1,7 @@
 export type DirectionCode = string;
 export type DayType = "WEEKDAY" | "WEEKEND";
 export type RecommendationMode = "seat";
-export type DoorHintKind = "transfer" | "facility";
+export type DoorHintKind = "transfer" | "transfer_boarding" | "facility";
 export type RecommendationGrade = "HIGH" | "MEDIUM" | "LOW";
 
 export interface Station {
@@ -60,6 +60,8 @@ export interface TransferDemandProfile {
   stationName: string;
   dayType: DayType;
   transferPassengers: number;
+  transferAlightings: number;
+  transferBoardings: number;
   source: string;
   observedOn: string;
 }
