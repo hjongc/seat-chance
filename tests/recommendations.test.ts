@@ -609,6 +609,7 @@ test("uses transfer door hints with observed station alighting demand", () => {
   assert.equal(result.recommendations[0].car_no, 2);
   assert.equal(result.recommendations[0].door_no, 3);
   assert.ok(result.recommendations[0].reasons.some((reason) => reason.includes("환승 동선")));
+  assert.ok(result.recommendations[0].reasons.some((reason) => reason.includes("환승 규모")));
 });
 
 test("keeps direct alighting demand ahead of transfer-door-only support", () => {

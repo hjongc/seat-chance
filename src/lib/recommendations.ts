@@ -27,6 +27,7 @@ interface Contribution {
   hint: DoorHint | null;
   hintDistance: number | null;
   stationDemand: number;
+  transferIntensity: number;
   competitionDemand: number;
   stationCongestionPct: number | null;
 }
@@ -107,6 +108,15 @@ export function recommendSeatPositions(
     stationCongestionProfiles.map((profile) => [profile.stationName, profile])
   );
   const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
+  const transferDemandByStation = new Map(
+    dataset.transferDemandProfiles
+      .filter((profile) => profile.lineNo === request.lineNo && profile.dayType === dayType)
+      .map((profile) => [profile.stationName, profile])
+  );
+  const maxTransferPassengers = Math.max(
+    1,
+    ...Array.from(transferDemandByStation.values()).map((profile) => profile.transferPassengers)
+  );
   const doorHintsByStationAndCar = indexDoorHints(
     dataset.doorHints.filter(
       (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
@@ -121,6 +131,8 @@ export function recommendSeatPositions(
       maxAlightings,
       maxBoardings,
       stationCongestionByStation,
+      transferDemandByStation,
+      maxTransferPassengers,
       doorHintsByStationAndCar
     })
   );
@@ -215,6 +227,8 @@ function scoreCandidate({
   maxAlightings,
   maxBoardings,
   stationCongestionByStation,
+  transferDemandByStation,
+  maxTransferPassengers,
   doorHintsByStationAndCar
 }: {
   candidate: Candidate;
@@ -224,6 +238,8 @@ function scoreCandidate({
   maxAlightings: number;
   maxBoardings: number;
   stationCongestionByStation: Map<string, SeatChanceDataset["stationCongestionProfiles"][number]>;
+  transferDemandByStation: Map<string, SeatChanceDataset["transferDemandProfiles"][number]>;
+  maxTransferPassengers: number;
   doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
@@ -240,6 +256,10 @@ function scoreCandidate({
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
+    const transferProfile = transferDemandByStation.get(station.stationName);
+    const transferIntensity = transferProfile
+      ? transferIntensityScore(transferProfile.transferPassengers, maxTransferPassengers)
+      : 0;
     const competitionFactor = transferCompetitionFactor(competitionDemand);
     const stationCongestion = stationCongestionByStation.get(station.stationName);
     const stationCongestionPct = stationCongestion?.congestionPct ?? null;
@@ -261,7 +281,12 @@ function scoreCandidate({
         : 0.8
       : 0;
     const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight * crowdingFactor;
-    const hintDemand = stationDemand;
+    const transferReleaseLift = matchingHint?.hint.kind === "transfer"
+      ? transferDemandLift(transferIntensity)
+      : 0;
+    const hintDemand = matchingHint?.hint.kind === "transfer"
+      ? clamp(stationDemand + transferReleaseLift, 0, 1)
+      : stationDemand;
     const hintBonus = matchingHint
       ? hintDemand *
         matchingHint.hint.weight *
@@ -285,13 +310,14 @@ function scoreCandidate({
         hint: matchingHint ? matchingHint.hint : null,
         hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
+        transferIntensity,
         competitionDemand,
         stationCongestionPct
       });
     }
 
     competitionDemand = clamp(
-      competitionDemand + boardingScore * transferBoardingProximity(matchingBoardingHint),
+      competitionDemand + transferIntensity * transferBoardingProximity(matchingBoardingHint),
       0,
       1
     );
@@ -406,6 +432,14 @@ function opportunityDistanceWeight(stationsAfter: number, totalStops: number) {
   return clamp(0.32 + Math.pow(remainingRatio, 0.65) * 0.68, 0.25, 1);
 }
 
+function transferIntensityScore(transferPassengers: number, maxTransferPassengers: number): number {
+  return clamp(Math.log1p(transferPassengers) / Math.log1p(maxTransferPassengers), 0, 1);
+}
+
+function transferDemandLift(transferIntensity: number): number {
+  return Math.sqrt(clamp(transferIntensity, 0, 1)) * 0.22;
+}
+
 function transferCompetitionFactor(competitionDemand: number): number {
   return clamp(1 - competitionDemand * 0.22, 0.78, 1);
 }
@@ -465,6 +499,10 @@ function toReasons(contributions: Contribution[], candidate: Candidate): string[
 
   if (primary && primary.competitionDemand > 0.2) {
     reasons.push("앞선 환승 승차 유입은 다음 구간의 좌석 경쟁 신호로 누적 반영했습니다.");
+  }
+
+  if (primary?.hint?.kind === "transfer" && primary.transferIntensity > 0.35) {
+    reasons.push(`${primary.stationName}은(는) 환승 규모가 큰 역이라 환승 동선 신호를 보수적으로 보강했습니다.`);
   }
 
   if (primary && primary.stationDemand > 0.2) {
