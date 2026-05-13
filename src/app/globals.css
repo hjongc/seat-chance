@@ -339,7 +339,6 @@ summary:focus-visible {
   align-self: flex-start;
 }
 
-.status-chip,
 .result-chip,
 .rank-badge,
 .grade {
@@ -352,11 +351,6 @@ summary:focus-visible {
   padding: 0 10px;
 }
 
-.status-chip {
-  background: var(--color-brand-soft);
-  border: 1px solid var(--color-brand-line);
-  color: var(--color-brand-strong);
-}
 
 .search-grid,
 .alternatives-grid {
@@ -392,6 +386,8 @@ summary:focus-visible {
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(16, 24, 38, 0.1);
   border-radius: 16px;
+  font-size: 16px;
+  line-height: 1.2;
   min-height: 52px;
   padding: 0 14px;
   transition:
