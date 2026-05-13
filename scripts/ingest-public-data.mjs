@@ -316,29 +316,6 @@ async function ingestTransferDemandProfiles() {
       continue;
     }
 
-    const transferAlightings = intValue(
-      pick(row, [
-        "일평균환승유입인원",
-        "일평균 환승유입인원",
-        "환승유입인원수",
-        "환승유입인원",
-        "transfer_alightings",
-        "transferAlightings"
-      ])
-    );
-    const transferBoardings = intValue(
-      pick(row, [
-        "일평균환승유출인원",
-        "일평균 환승유출인원",
-        "환승유출인원수",
-        "환승유출인원",
-        "환승승차인원",
-        "transfer_boardings",
-        "transferBoardings"
-      ])
-    );
-    const directionalPassengers = transferAlightings + transferBoardings;
-
     const weekdayPassengers = intValue(
       pick(row, [
         "평일 일평균 환승인원",
@@ -358,8 +335,8 @@ async function ingestTransferDemandProfiles() {
     const weekendPassengers = averagePositive([saturdayPassengers, sundayPassengers]);
 
     for (const [dayType, passengers] of [
-      ["WEEKDAY", Math.max(weekdayPassengers, directionalPassengers)],
-      ["WEEKEND", Math.max(weekendPassengers, directionalPassengers)]
+      ["WEEKDAY", weekdayPassengers],
+      ["WEEKEND", weekendPassengers]
     ]) {
       if (passengers <= 0) {
         continue;
@@ -368,17 +345,14 @@ async function ingestTransferDemandProfiles() {
       await client.query(
         `
           insert into transfer_demand_profile (
-            line_no, station_name, day_type, transfer_passengers,
-            transfer_alightings, transfer_boardings, source, observed_on
-          ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+            line_no, station_name, day_type, transfer_passengers, source, observed_on
+          ) values ($1, $2, $3, $4, $5, $6)
           on conflict (line_no, station_name, day_type, observed_on) do update set
             transfer_passengers = excluded.transfer_passengers,
-            transfer_alightings = excluded.transfer_alightings,
-            transfer_boardings = excluded.transfer_boardings,
             source = excluded.source,
             ingested_at = now()
         `,
-        [targetLineNo, stationName, dayType, passengers, transferAlightings, transferBoardings, source, observedOn]
+        [targetLineNo, stationName, dayType, passengers, source, observedOn]
       );
       count += 1;
     }

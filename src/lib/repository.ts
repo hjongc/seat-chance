@@ -8,11 +8,6 @@ import type {
   TrainLayout
 } from "./types";
 
-type LegacyTransferDemandProfile = Omit<
-  SeatChanceDataset["transferDemandProfiles"][number],
-  "transferAlightings" | "transferBoardings"
->;
-
 export type DataStatusCode =
   | "READY"
   | "MISSING_DATABASE_URL"
@@ -423,8 +418,6 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
             station_name as "stationName",
             day_type as "dayType",
             transfer_passengers as "transferPassengers",
-            transfer_alightings as "transferAlightings",
-            transfer_boardings as "transferBoardings",
             source,
             observed_on::text as "observedOn"
           from transfer_demand_profile
@@ -440,39 +433,8 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       if (isUndefinedTableError(error)) {
         return [];
       }
-      if (isUndefinedColumnError(error)) {
-        return this.getLegacyTransferDemandProfiles(lineNo, dayType);
-      }
       throw error;
     }
-  }
-
-  private async getLegacyTransferDemandProfiles(
-    lineNo: string,
-    dayType: DayType
-  ): Promise<SeatChanceDataset["transferDemandProfiles"]> {
-    const result = await this.pool.query<LegacyTransferDemandProfile>(
-      `
-        select distinct on (line_no, station_name, day_type)
-          line_no as "lineNo",
-          station_name as "stationName",
-          day_type as "dayType",
-          transfer_passengers as "transferPassengers",
-          source,
-          observed_on::text as "observedOn"
-        from transfer_demand_profile
-        where line_no = $1
-          and day_type = $2
-        order by line_no, station_name, day_type, observed_on desc
-      `,
-      [lineNo, dayType]
-    );
-
-    return result.rows.map((profile) => ({
-      ...profile,
-      transferAlightings: 0,
-      transferBoardings: 0
-    }));
   }
 }
 
@@ -611,15 +573,6 @@ function isUndefinedTableError(error: unknown) {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "42P01"
-  );
-}
-
-function isUndefinedColumnError(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: unknown }).code === "42703"
   );
 }
 

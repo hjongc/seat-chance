@@ -60,8 +60,6 @@ export interface TransferDemandProfile {
   stationName: string;
   dayType: DayType;
   transferPassengers: number;
-  transferAlightings: number;
-  transferBoardings: number;
   source: string;
   observedOn: string;
 }

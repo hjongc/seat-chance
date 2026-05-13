@@ -27,8 +27,6 @@ interface Contribution {
   hint: DoorHint | null;
   hintDistance: number | null;
   stationDemand: number;
-  transferAlightingDemand: number;
-  transferBoardingDemand: number;
   competitionDemand: number;
   stationCongestionPct: number | null;
 }
@@ -109,19 +107,6 @@ export function recommendSeatPositions(
     stationCongestionProfiles.map((profile) => [profile.stationName, profile])
   );
   const profileByStation = new Map(profiles.map((profile) => [profile.stationName, profile]));
-  const transferDemandByStation = new Map(
-    dataset.transferDemandProfiles
-      .filter((profile) => profile.lineNo === request.lineNo && profile.dayType === dayType)
-      .map((profile) => [profile.stationName, profile])
-  );
-  const maxTransferAlightings = Math.max(
-    1,
-    ...Array.from(transferDemandByStation.values()).map((profile) => profile.transferAlightings)
-  );
-  const maxTransferBoardings = Math.max(
-    1,
-    ...Array.from(transferDemandByStation.values()).map((profile) => profile.transferBoardings)
-  );
   const doorHintsByStationAndCar = indexDoorHints(
     dataset.doorHints.filter(
       (hint) => hint.lineNo === request.lineNo && hint.direction === request.direction
@@ -136,9 +121,6 @@ export function recommendSeatPositions(
       maxAlightings,
       maxBoardings,
       stationCongestionByStation,
-      transferDemandByStation,
-      maxTransferAlightings,
-      maxTransferBoardings,
       doorHintsByStationAndCar
     })
   );
@@ -233,9 +215,6 @@ function scoreCandidate({
   maxAlightings,
   maxBoardings,
   stationCongestionByStation,
-  transferDemandByStation,
-  maxTransferAlightings,
-  maxTransferBoardings,
   doorHintsByStationAndCar
 }: {
   candidate: Candidate;
@@ -245,9 +224,6 @@ function scoreCandidate({
   maxAlightings: number;
   maxBoardings: number;
   stationCongestionByStation: Map<string, SeatChanceDataset["stationCongestionProfiles"][number]>;
-  transferDemandByStation: Map<string, SeatChanceDataset["transferDemandProfiles"][number]>;
-  maxTransferAlightings: number;
-  maxTransferBoardings: number;
   doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
@@ -255,8 +231,7 @@ function scoreCandidate({
 
   for (const [index, station] of intermediateStations.entries()) {
     const profile = profileByStation.get(station.stationName);
-    const transferProfile = transferDemandByStation.get(station.stationName);
-    if (!profile && !transferProfile) {
+    if (!profile) {
       continue;
     }
 
@@ -265,9 +240,6 @@ function scoreCandidate({
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
-    const transferAlightingDemand = transferProfile ? transferProfile.transferAlightings / maxTransferAlightings : 0;
-    const transferBoardingDemand = transferProfile ? transferProfile.transferBoardings / maxTransferBoardings : 0;
-    const transferLift = transferDemandLift(transferAlightingDemand);
     const competitionFactor = transferCompetitionFactor(competitionDemand);
     const stationCongestion = stationCongestionByStation.get(station.stationName);
     const stationCongestionPct = stationCongestion?.congestionPct ?? null;
@@ -288,11 +260,8 @@ function scoreCandidate({
         ? 1
         : 0.8
       : 0;
-    const baseline =
-      (alightingScore * 7.2 + stationDemand * 5.6 + transferLift * 2.8) * distanceWeight * crowdingFactor;
-    const hintDemand = matchingHint?.hint.kind === "transfer"
-      ? clamp(stationDemand + transferLift, 0, 1)
-      : stationDemand;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight * crowdingFactor;
+    const hintDemand = stationDemand;
     const hintBonus = matchingHint
       ? hintDemand *
         matchingHint.hint.weight *
@@ -316,15 +285,13 @@ function scoreCandidate({
         hint: matchingHint ? matchingHint.hint : null,
         hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
-        transferAlightingDemand,
-        transferBoardingDemand,
         competitionDemand,
         stationCongestionPct
       });
     }
 
     competitionDemand = clamp(
-      competitionDemand + transferBoardingDemand * transferBoardingProximity(matchingBoardingHint),
+      competitionDemand + boardingScore * transferBoardingProximity(matchingBoardingHint),
       0,
       1
     );
@@ -439,17 +406,13 @@ function opportunityDistanceWeight(stationsAfter: number, totalStops: number) {
   return clamp(0.32 + Math.pow(remainingRatio, 0.65) * 0.68, 0.25, 1);
 }
 
-function transferDemandLift(transferSeatDemand: number): number {
-  return Math.sqrt(clamp(transferSeatDemand, 0, 1)) * 0.45;
-}
-
 function transferCompetitionFactor(competitionDemand: number): number {
   return clamp(1 - competitionDemand * 0.22, 0.78, 1);
 }
 
 function transferBoardingProximity(matchingBoardingHint: { hint: DoorHint; distance: number } | null): number {
   if (!matchingBoardingHint) {
-    return 0.18;
+    return 0;
   }
 
   const distanceFactor = matchingBoardingHint.distance === 0 ? 0.55 : 0.4;
@@ -500,10 +463,6 @@ function toReasons(contributions: Contribution[], candidate: Candidate): string[
     reasons.push(toPrimaryReason(primary, candidate));
   }
 
-  if (primary && primary.transferAlightingDemand > 0.2) {
-    reasons.push(`${primary.stationName}은(는) 환승 하차 유입이 커 좌석 회전 신호를 보탭니다.`);
-  }
-
   if (primary && primary.competitionDemand > 0.2) {
     reasons.push("앞선 환승 승차 유입은 다음 구간의 좌석 경쟁 신호로 누적 반영했습니다.");
   }
@@ -539,7 +498,7 @@ function toPrimaryReason(contribution: Contribution, candidate: Candidate): stri
   }
 
   const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "출구·계단";
-  const demandLabel = contribution.hint.kind === "transfer" ? "하차·환승하차 수요" : "하차 수요";
+  const demandLabel = "하차 수요";
   const relation = toHintRelation(contribution, candidate);
 
   return `${contribution.stationName} ${hintLabel} 동선${relation} ${demandLabel}를 먼저 받을 수 있습니다.`;
