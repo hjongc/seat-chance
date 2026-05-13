@@ -66,7 +66,7 @@ const requiredTables = [
   "exit_or_facility_door"
 ] as const;
 
-const optionalTables = ["station_congestion_profile", "transfer_demand_profile"] as const;
+const optionalTables = ["station_congestion_profile", "transfer_demand_profile", "transfer_boarding_door"] as const;
 const statusTables = [...requiredTables, ...optionalTables] as const;
 
 class PostgresSeatChanceRepository implements SeatChanceRepository {
@@ -268,38 +268,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
         ),
         this.getStationCongestionProfiles(lineNo, direction, dayType),
         this.getTransferDemandProfiles(lineNo, dayType),
-        this.pool.query<DoorHint>(
-          `
-            select
-              'transfer' as kind,
-              line_no as "lineNo",
-              station_name as "stationName",
-              direction_code as "direction",
-              car_no as "carNo",
-              door_no as "doorNo",
-              weight::float as weight,
-              description,
-              source,
-              confidence::float as confidence
-            from transfer_door
-            where line_no = $1 and direction_code = $2
-            union all
-            select
-              'facility' as kind,
-              line_no as "lineNo",
-              station_name as "stationName",
-              direction_code as "direction",
-              car_no as "carNo",
-              door_no as "doorNo",
-              weight::float as weight,
-              description,
-              source,
-              confidence::float as confidence
-            from exit_or_facility_door
-            where line_no = $1 and direction_code = $2
-          `,
-          [lineNo, direction]
-        )
+        this.getDoorHints(lineNo, direction)
       ]);
 
     return {
@@ -311,6 +280,97 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
       transferDemandProfiles,
       doorHints: doorHints.rows
     };
+  }
+
+  private async getDoorHints(lineNo: string, direction: DirectionCode): Promise<{ rows: DoorHint[] }> {
+    try {
+      return await this.pool.query<DoorHint>(
+        `
+          select
+            'transfer' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from transfer_door
+          where line_no = $1 and direction_code = $2
+          union all
+          select
+            'transfer_boarding' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from transfer_boarding_door
+          where line_no = $1 and direction_code = $2
+          union all
+          select
+            'facility' as kind,
+            line_no as "lineNo",
+            station_name as "stationName",
+            direction_code as "direction",
+            car_no as "carNo",
+            door_no as "doorNo",
+            weight::float as weight,
+            description,
+            source,
+            confidence::float as confidence
+          from exit_or_facility_door
+          where line_no = $1 and direction_code = $2
+        `,
+        [lineNo, direction]
+      );
+    } catch (error) {
+      if (isUndefinedTableError(error)) {
+        return this.getLegacyDoorHints(lineNo, direction);
+      }
+      throw error;
+    }
+  }
+
+  private async getLegacyDoorHints(lineNo: string, direction: DirectionCode): Promise<{ rows: DoorHint[] }> {
+    return this.pool.query<DoorHint>(
+      `
+        select
+          'transfer' as kind,
+          line_no as "lineNo",
+          station_name as "stationName",
+          direction_code as "direction",
+          car_no as "carNo",
+          door_no as "doorNo",
+          weight::float as weight,
+          description,
+          source,
+          confidence::float as confidence
+        from transfer_door
+        where line_no = $1 and direction_code = $2
+        union all
+        select
+          'facility' as kind,
+          line_no as "lineNo",
+          station_name as "stationName",
+          direction_code as "direction",
+          car_no as "carNo",
+          door_no as "doorNo",
+          weight::float as weight,
+          description,
+          source,
+          confidence::float as confidence
+        from exit_or_facility_door
+        where line_no = $1 and direction_code = $2
+      `,
+      [lineNo, direction]
+    );
   }
 
   private async getStationCongestionProfiles(

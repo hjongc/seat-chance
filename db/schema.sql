@@ -85,6 +85,19 @@ create table if not exists transfer_door (
   primary key (line_no, station_name, direction_code, car_no, door_no)
 );
 
+create table if not exists transfer_boarding_door (
+  line_no text not null,
+  station_name text not null,
+  direction_code text not null,
+  car_no integer not null check (car_no > 0),
+  door_no integer not null check (door_no > 0),
+  weight numeric(4, 3) not null check (weight >= 0 and weight <= 1),
+  description text not null,
+  source text not null,
+  confidence numeric(3, 2) not null check (confidence >= 0 and confidence <= 1),
+  primary key (line_no, station_name, direction_code, car_no, door_no)
+);
+
 create table if not exists exit_or_facility_door (
   line_no text not null,
   station_name text not null,
@@ -132,6 +145,9 @@ create index if not exists transfer_demand_profile_lookup_idx
 
 create index if not exists transfer_door_lookup_idx
   on transfer_door (line_no, station_name, direction_code);
+
+create index if not exists transfer_boarding_door_lookup_idx
+  on transfer_boarding_door (line_no, station_name, direction_code);
 
 create index if not exists facility_door_lookup_idx
   on exit_or_facility_door (line_no, station_name, direction_code);

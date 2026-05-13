@@ -27,7 +27,8 @@ interface Contribution {
   hint: DoorHint | null;
   hintDistance: number | null;
   stationDemand: number;
-  transferDemand: number;
+  transferIntensity: number;
+  competitionDemand: number;
   stationCongestionPct: number | null;
 }
 
@@ -242,6 +243,7 @@ function scoreCandidate({
   doorHintsByStationAndCar: Map<string, DoorHint[]>;
 }): Candidate {
   const scored: Candidate = { ...candidate, rawScore: 0, contributions: [] };
+  let competitionDemand = 0;
 
   for (const [index, station] of intermediateStations.entries()) {
     const profile = profileByStation.get(station.stationName);
@@ -250,50 +252,53 @@ function scoreCandidate({
       continue;
     }
 
-    const progress = (index + 1) / totalStops;
     const stationsAfter = totalStops - index - 1;
-    const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
-    const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
-    const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
+    const distanceWeight = opportunityDistanceWeight(stationsAfter, totalStops);
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
-    const transferDemand = transferProfile ? transferProfile.transferPassengers / maxTransferPassengers : 0;
+    const transferIntensity = transferProfile
+      ? transferIntensityScore(transferProfile.transferPassengers, maxTransferPassengers)
+      : 0;
+    const competitionFactor = transferCompetitionFactor(competitionDemand);
     const stationCongestion = stationCongestionByStation.get(station.stationName);
     const stationCongestionPct = stationCongestion?.congestionPct ?? null;
     const crowdingFactor = stationCongestionPct === null ? 1 : stationCrowdingFactor(stationCongestionPct);
-    const matchingHint = (doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? []).reduce<{
-      hint: DoorHint;
-      distance: number;
-    } | null>(
-      (best, hint) => {
-        const distance = Math.abs(hint.doorNo - candidate.doorNo);
-        if (distance > 1) {
-          return best;
-        }
-        if (!best || distance < best.distance || (distance === best.distance && hint.weight > best.hint.weight)) {
-          return { hint, distance };
-        }
-        return best;
-      },
-      null
+    const stationCarHints = doorHintsByStationAndCar.get(hintIndexKey(station.stationName, candidate.carNo)) ?? [];
+    const matchingHint = nearestDoorHint(
+      stationCarHints,
+      candidate,
+      (kind) => kind === "transfer" || kind === "facility"
+    );
+    const matchingBoardingHint = nearestDoorHint(
+      stationCarHints,
+      candidate,
+      (kind) => kind === "transfer_boarding"
     );
     const hintDistanceFactor = matchingHint
       ? matchingHint.distance === 0
         ? 1
-        : 0.9
+        : 0.8
       : 0;
-    const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight * crowdingFactor;
+    const baseline = (alightingScore * 7.2 + stationDemand * 5.6) * distanceWeight * crowdingFactor;
+    const transferReleaseLift = matchingHint?.hint.kind === "transfer"
+      ? transferDemandLift(transferIntensity)
+      : 0;
     const hintDemand = matchingHint?.hint.kind === "transfer"
-      ? Math.max(stationDemand, transferDemand * 0.85)
+      ? clamp(stationDemand + transferReleaseLift, 0, 1)
       : stationDemand;
     const hintBonus = matchingHint
-      ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor * crowdingFactor
+      ? hintDemand *
+        matchingHint.hint.weight *
+        (matchingHint.hint.kind === "transfer" ? 34 : 22) *
+        distanceWeight *
+        hintDistanceFactor *
+        crowdingFactor
       : 0;
     const hintBoost = matchingHint
       ? (matchingHint.hint.kind === "transfer" ? 1.25 : 0.75)
       : 0;
-    const contributionScore = baseline + hintBonus * hintBoost;
+    const contributionScore = (baseline + hintBonus * hintBoost) * competitionFactor;
 
     scored.rawScore += contributionScore;
     if (contributionScore > 0) {
@@ -305,10 +310,17 @@ function scoreCandidate({
         hint: matchingHint ? matchingHint.hint : null,
         hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
-        transferDemand,
+        transferIntensity,
+        competitionDemand,
         stationCongestionPct
       });
     }
+
+    competitionDemand = clamp(
+      competitionDemand + transferIntensity * transferBoardingProximity(matchingBoardingHint),
+      0,
+      1
+    );
   }
 
   return scored;
@@ -332,6 +344,27 @@ function indexDoorHints(doorHints: DoorHint[]) {
 
 function hintIndexKey(stationName: string, carNo: number) {
   return `${stationName}\u0000${carNo}`;
+}
+
+function nearestDoorHint(
+  hints: DoorHint[],
+  candidate: Candidate,
+  includesKind: (kind: DoorHint["kind"]) => boolean
+): { hint: DoorHint; distance: number } | null {
+  return hints.reduce<{ hint: DoorHint; distance: number } | null>((best, hint) => {
+    if (!includesKind(hint.kind)) {
+      return best;
+    }
+
+    const distance = Math.abs(hint.doorNo - candidate.doorNo);
+    if (distance > 1) {
+      return best;
+    }
+    if (!best || distance < best.distance || (distance === best.distance && hint.weight > best.hint.weight)) {
+      return { hint, distance };
+    }
+    return best;
+  }, null);
 }
 
 function toRecommendation(
@@ -390,6 +423,36 @@ function getCongestionPenalty(profile: CongestionProfile | undefined): number {
   return clamp((profile.congestionPct - 100) * 0.28, 0, 22);
 }
 
+function opportunityDistanceWeight(stationsAfter: number, totalStops: number) {
+  if (totalStops <= 0) {
+    return 1;
+  }
+
+  const remainingRatio = stationsAfter / totalStops;
+  return clamp(0.32 + Math.pow(remainingRatio, 0.65) * 0.68, 0.25, 1);
+}
+
+function transferIntensityScore(transferPassengers: number, maxTransferPassengers: number): number {
+  return clamp(Math.log1p(transferPassengers) / Math.log1p(maxTransferPassengers), 0, 1);
+}
+
+function transferDemandLift(transferIntensity: number): number {
+  return Math.sqrt(clamp(transferIntensity, 0, 1)) * 0.22;
+}
+
+function transferCompetitionFactor(competitionDemand: number): number {
+  return clamp(1 - competitionDemand * 0.22, 0.78, 1);
+}
+
+function transferBoardingProximity(matchingBoardingHint: { hint: DoorHint; distance: number } | null): number {
+  if (!matchingBoardingHint) {
+    return 0;
+  }
+
+  const distanceFactor = matchingBoardingHint.distance === 0 ? 0.55 : 0.4;
+  return distanceFactor * matchingBoardingHint.hint.weight;
+}
+
 function stationCrowdingFactor(congestionPct: number): number {
   return clamp(1.08 - Math.max(congestionPct - 70, 0) * 0.003, 0.62, 1.08);
 }
@@ -434,8 +497,12 @@ function toReasons(contributions: Contribution[], candidate: Candidate): string[
     reasons.push(toPrimaryReason(primary, candidate));
   }
 
-  if (primary && primary.transferDemand > 0.2) {
-    reasons.push(`${primary.stationName}은(는) 환승인원 데이터상 환승 수요가 큰 역입니다.`);
+  if (primary && primary.competitionDemand > 0.2) {
+    reasons.push("앞선 환승 승차 유입은 다음 구간의 좌석 경쟁 신호로 누적 반영했습니다.");
+  }
+
+  if (primary?.hint?.kind === "transfer" && primary.transferIntensity > 0.35) {
+    reasons.push(`${primary.stationName}은(는) 환승 규모가 큰 역이라 환승 동선 신호를 보수적으로 보강했습니다.`);
   }
 
   if (primary && primary.stationDemand > 0.2) {
@@ -469,7 +536,7 @@ function toPrimaryReason(contribution: Contribution, candidate: Candidate): stri
   }
 
   const hintLabel = contribution.hint.kind === "transfer" ? "환승" : "출구·계단";
-  const demandLabel = contribution.hint.kind === "transfer" ? "하차/환승 수요" : "하차 수요";
+  const demandLabel = "하차 수요";
   const relation = toHintRelation(contribution, candidate);
 
   return `${contribution.stationName} ${hintLabel} 동선${relation} ${demandLabel}를 먼저 받을 수 있습니다.`;

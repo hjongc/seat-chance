@@ -304,6 +304,11 @@ async function ingestTransferDemandProfiles() {
   let count = 0;
 
   for (const row of rows) {
+    const rowLineNo = normalizeLineNo(pick(row, ["호선", "해당호선", "LINE_NUM", "line_no", "lineNo"]));
+    if (rowLineNo && rowLineNo !== targetLineNo) {
+      continue;
+    }
+
     const stationName = normalizeStationName(
       pick(row, ["역명", "출발역명", "환승역사 역명", "환승역사", "station_name", "STATION_NM", "stationName"])
     );
@@ -362,42 +367,65 @@ async function ingestTransferDemandProfiles() {
 
 async function ingestTransferDoors() {
   const rows = await fetchConfiguredRows("TRANSFER");
+  await client.query("delete from transfer_boarding_door where line_no = $1", [targetLineNo]);
   let count = 0;
 
   for (const row of rows) {
-    const lineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
+    const startLineNo = normalizeLineNo(pick(row, ["환승시작 호선", "LINE_NUM", "line_no"]));
+    const endStationCode = transferEndStationCode(row);
+    const endLineNo =
+      normalizeLineNo(pick(row, ["환승종료 호선", "환승 종료 호선", "end_line_no"])) ||
+      lineNoFromStationCode(endStationCode);
     const stationName = normalizeStationName(pick(row, ["환승시작역", "station_name", "STATION_NM"]));
-    const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
-    const direction = (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
-    const carNo = intValue(pick(row, ["하차위치(호차)", "하차위치 호차", "car_no", "CAR_NO"]));
-    const doorNo = intValue(pick(row, ["하차위치(문)", "하차위치 문", "door_no", "DOOR_NO"]));
+    const source = sourceUrl("TRANSFER") ?? "configured transfer source";
 
-    if (lineNo !== targetLineNo || !direction || !stationName || !carNo || !doorNo) {
-      continue;
+    if (startLineNo === targetLineNo && stationName) {
+      const rawDirection = pick(row, ["하차 열차 방면", "direction", "DIRECTION"]);
+      const direction =
+        (await normalizeDirection(rawDirection)) || (await inferDirectionFromStationText(stationName, rawDirection));
+      const carNo = intValue(pick(row, ["하차위치(호차)", "하차위치 호차", "car_no", "CAR_NO"]));
+      const doorNo = intValue(pick(row, ["하차위치(문)", "하차위치 문", "door_no", "DOOR_NO"]));
+
+      if (direction && carNo && doorNo) {
+        await upsertDoorHint(
+          "transfer_door",
+          stationName,
+          direction,
+          carNo,
+          doorNo,
+          "공공 환승정보의 최단 환승 하차문",
+          source
+        );
+        count += 1;
+      }
     }
 
-    await client.query(
-      `
-        insert into transfer_door (
-          line_no, station_name, direction_code, car_no, door_no, weight, description, source, confidence
-        ) values ($1, $2, $3, $4, $5, 1.000, $6, $7, 0.80)
-        on conflict (line_no, station_name, direction_code, car_no, door_no) do update set
-          weight = excluded.weight,
-          description = excluded.description,
-          source = excluded.source,
-          confidence = excluded.confidence
-      `,
-      [
-        targetLineNo,
-        stationName,
-        direction,
-        carNo,
-        doorNo,
-        "공공 환승정보의 최단 환승 하차문",
-        sourceUrl("TRANSFER") ?? "configured transfer source"
-      ]
-    );
-    count += 1;
+    if (endLineNo === targetLineNo) {
+      const boardingStationName = await transferEndStationName(row, endStationCode);
+      const rawDirection = pick(row, ["환승 열차 방면", "환승열차방면", "boarding_direction", "BOARDING_DIRECTION"]);
+      const direction =
+        (await normalizeDirection(rawDirection)) ||
+        (await inferDirectionFromStationText(boardingStationName, rawDirection));
+      const carNo = intValue(
+        pick(row, ["환승 승차위치(호차)", "환승 승차위치 호차", "boarding_car_no", "BOARDING_CAR_NO"])
+      );
+      const doorNo = intValue(
+        pick(row, ["환승 승차위치(문)", "환승 승차위치 문", "boarding_door_no", "BOARDING_DOOR_NO"])
+      );
+
+      if (boardingStationName && direction && carNo && doorNo) {
+        await upsertDoorHint(
+          "transfer_boarding_door",
+          boardingStationName,
+          direction,
+          carNo,
+          doorNo,
+          "공공 환승정보의 환승 승차문",
+          source
+        );
+        count += 1;
+      }
+    }
   }
 
   if (count === 0) {
@@ -405,6 +433,68 @@ async function ingestTransferDoors() {
   }
 
   return count;
+}
+
+function transferEndStationCode(row) {
+  const explicitCode = stringValue(pick(row, ["환승종료 코드", "end_station_code"]));
+  if (explicitCode) {
+    return explicitCode;
+  }
+
+  const stationValue = stringValue(pick(row, ["환승종료역"]));
+  return /^\d+$/.test(stationValue) ? stationValue : "";
+}
+
+async function transferEndStationName(row, stationCode) {
+  const explicitName = normalizeStationName(
+    pick(row, ["환승종료역명", "환승 종료역", "환승종료역사", "end_station_name", "END_STATION_NM"])
+  );
+  if (explicitName) {
+    return explicitName;
+  }
+
+  const endStationValue = stringValue(pick(row, ["환승종료역"]));
+  if (endStationValue && !/^\d+$/.test(endStationValue)) {
+    return normalizeStationName(endStationValue);
+  }
+
+  return stationNameByLineAndCode(targetLineNo, stationCode);
+}
+
+async function stationNameByLineAndCode(lineNo, stationCode) {
+  if (!stationCode) {
+    return "";
+  }
+
+  const result = await client.query(
+    `
+      select station_name
+      from station_line_order
+      where operator = $1
+        and line_no = $2
+        and station_code = $3
+      limit 1
+    `,
+    [operator, lineNo, stationCode]
+  );
+
+  return normalizeStationName(result.rows[0]?.station_name);
+}
+
+async function upsertDoorHint(tableName, stationName, direction, carNo, doorNo, description, source) {
+  await client.query(
+    `
+      insert into ${tableName} (
+        line_no, station_name, direction_code, car_no, door_no, weight, description, source, confidence
+      ) values ($1, $2, $3, $4, $5, 1.000, $6, $7, 0.80)
+      on conflict (line_no, station_name, direction_code, car_no, door_no) do update set
+        weight = excluded.weight,
+        description = excluded.description,
+        source = excluded.source,
+        confidence = excluded.confidence
+    `,
+    [targetLineNo, stationName, direction, carNo, doorNo, description, source]
+  );
 }
 
 async function ingestFastExitDoors() {
@@ -1003,6 +1093,17 @@ function normalizeLineNo(value) {
       .trim();
   }
   return String(Number(match[0]));
+}
+
+function lineNoFromStationCode(value) {
+  const digits = stringValue(value).replace(/\D/g, "");
+  if (digits.length === 3) {
+    return String(Number(digits.slice(0, 1)));
+  }
+  if (digits.length < 4) {
+    return "";
+  }
+  return String(Number(digits.slice(0, 2)));
 }
 
 function lineLabel(lineNo) {
