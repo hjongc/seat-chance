@@ -616,3 +616,226 @@ test("supports line 2 circular routes across the sequence boundary", () => {
   assert.equal(result.direction, "내선");
   assert.equal(result.recommendations.length, 3);
 });
+
+test("caps line 2 recommendations when seat signals are only near the destination", () => {
+  const stations = [
+    "신도림",
+    "대림",
+    "구로디지털단지",
+    "신대방",
+    "신림",
+    "봉천",
+    "서울대입구",
+    "낙성대",
+    "사당",
+    "방배",
+    "서초",
+    "교대",
+    "강남",
+    "역삼",
+    "선릉"
+  ];
+  const lineTwoDataset: SeatChanceDataset = {
+    stations: stations.map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "2",
+      stationCode: `L2-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "2",
+        branchCode: "MAIN",
+        direction: "내선",
+        carCount: 2,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      ["강남", 1200, 8000],
+      ["역삼", 600, 6000]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "2",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [
+      {
+        lineNo: "2",
+        direction: "내선",
+        dayType: "WEEKDAY",
+        timeSlot: "08:00",
+        congestionPct: 120,
+        source: "test fixture"
+      }
+    ],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "2",
+        stationName: "강남",
+        direction: "내선",
+        carNo: 1,
+        doorNo: 2,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "신도림",
+      destination: "선릉",
+      lineNo: "2",
+      direction: "내선",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    lineTwoDataset
+  );
+
+  assert.equal(result.recommendations[0].grade, "LOW");
+  assert.ok(result.recommendations[0].score <= 50);
+  assert.equal(result.recommendations[0].expected_seat_window, "도착 임박 구간");
+  assert.ok(result.recommendations[0].reasons.some((reason) => reason.includes("목적지 직전")));
+});
+
+test("ignores arrival-imminent line 2 hints on longer routes", () => {
+  const stations = [
+    "시청",
+    "을지로입구",
+    "을지로3가",
+    "신당",
+    "성수",
+    "건대입구",
+    "잠실",
+    "선릉",
+    "역삼",
+    "강남",
+    "교대",
+    "서초",
+    "방배",
+    "사당",
+    "낙성대",
+    "서울대입구",
+    "봉천",
+    "신림",
+    "신대방",
+    "구로디지털단지",
+    "대림",
+    "신도림"
+  ];
+  const lineTwoDataset: SeatChanceDataset = {
+    stations: stations.map((stationName, index) => ({
+      operator: "서울교통공사",
+      lineNo: "2",
+      stationCode: `L2-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "서울교통공사",
+        lineNo: "2",
+        branchCode: "MAIN",
+        direction: "외선",
+        carCount: 2,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      ["사당", 500, 2500],
+      ["강남", 100, 9000],
+      ["역삼", 100, 10000]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "2",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "2",
+        stationName: "사당",
+        direction: "외선",
+        carNo: 2,
+        doorNo: 3,
+        weight: 0.8,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "2",
+        stationName: "강남",
+        direction: "외선",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "2",
+        stationName: "역삼",
+        direction: "외선",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "신도림",
+      destination: "선릉",
+      lineNo: "2",
+      direction: "외선",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    lineTwoDataset
+  );
+
+  assert.equal(result.recommendations[0].car_no, 2);
+  assert.equal(result.recommendations[0].door_no, 3);
+  assert.equal(result.recommendations[0].expected_seat_window, "사당");
+  assert.doesNotMatch(result.recommendations[0].expected_seat_window, /강남|역삼/);
+});

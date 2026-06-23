@@ -29,6 +29,7 @@ interface Contribution {
   stationDemand: number;
   transferDemand: number;
   stationCongestionPct: number | null;
+  arrivalImminent: boolean;
 }
 
 export function recommendSeatPositions(
@@ -252,9 +253,8 @@ function scoreCandidate({
 
     const progress = (index + 1) / totalStops;
     const stationsAfter = totalStops - index - 1;
-    const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
-    const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
-    const distanceWeight = clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
+    const arrivalImminent = isArrivalImminentStop(totalStops, stationsAfter);
+    const distanceWeight = getDistanceWeight(stationsAfter, progress, totalStops);
     const alightingScore = profile ? profile.alightings / maxAlightings : 0;
     const boardingScore = profile ? profile.boardings / maxBoardings : 0;
     const stationDemand = clamp(alightingScore - boardingScore * 0.55, 0, 1);
@@ -285,8 +285,8 @@ function scoreCandidate({
       : 0;
     const baseline = (alightingScore * 7.2 + stationDemand * 5.6 + transferDemand * 3.2) * distanceWeight * crowdingFactor;
     const hintDemand = matchingHint?.hint.kind === "transfer"
-      ? Math.max(stationDemand, transferDemand * 0.85)
-      : stationDemand;
+      ? Math.max(stationDemand, transferDemand * 0.85, alightingScore * 0.35)
+      : Math.max(stationDemand, alightingScore * 0.25);
     const hintBonus = matchingHint
       ? hintDemand * matchingHint.hint.weight * (matchingHint.hint.kind === "transfer" ? 34 : 22) * distanceWeight * hintDistanceFactor * crowdingFactor
       : 0;
@@ -306,7 +306,8 @@ function scoreCandidate({
         hintDistance: matchingHint ? matchingHint.distance : null,
         stationDemand,
         transferDemand,
-        stationCongestionPct
+        stationCongestionPct,
+        arrivalImminent
       });
     }
   }
@@ -355,8 +356,9 @@ function toRecommendation(
   const range = Math.max(1, maxRaw - minRaw);
   const normalizedScore = (candidate.rawScore - minRaw) / range;
   const relativeScore = 28 + normalizedScore * 52;
-  const score = clamp(roundToTenth(relativeScore - congestionPenalty), 0, 100);
   const sortedContributions = [...candidate.contributions].sort((left, right) => right.score - left.score);
+  const arrivalWindowCap = getArrivalWindowScoreCap(sortedContributions);
+  const score = clamp(roundToTenth(Math.min(relativeScore, arrivalWindowCap) - congestionPenalty), 0, 100);
 
   return {
     rank: 0,
@@ -406,10 +408,9 @@ function toGrade(score: number) {
 
 function toExpectedSeatWindow(contributions: Contribution[]): string {
   const hintedContributions = contributions.filter((contribution) => contribution.hint);
-  const keyStations =
-    hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2).length >= 2
-      ? hintedContributions.filter((contribution) => contribution.remainingStops >= 2).slice(0, 2)
-      : hintedContributions.slice(0, 2);
+  const actionableHintedContributions = hintedContributions.filter((contribution) => !contribution.arrivalImminent);
+  const actionableContributions = contributions.filter((contribution) => !contribution.arrivalImminent);
+  const keyStations = actionableHintedContributions.slice(0, 2);
   keyStations.sort((left, right) => left.sequenceNo - right.sequenceNo);
 
   if (keyStations.length >= 2) {
@@ -419,8 +420,12 @@ function toExpectedSeatWindow(contributions: Contribution[]): string {
     return keyStations[0].stationName;
   }
 
-  const fallback = contributions[0];
-  return fallback ? fallback.stationName : "중간역";
+  const fallback = actionableContributions[0];
+  if (fallback) {
+    return fallback.stationName;
+  }
+
+  return contributions[0] ? "도착 임박 구간" : "중간역";
 }
 
 function toReasons(contributions: Contribution[], candidate: Candidate): string[] {
@@ -454,7 +459,9 @@ function toReasons(contributions: Contribution[], candidate: Candidate): string[
     reasons.push(toSecondaryReason(secondary, candidate));
   }
 
-  if (primary && primary.remainingStops >= 3) {
+  if (primary?.arrivalImminent) {
+    reasons.push("추천 신호가 목적지 직전 구간에 몰려 실제 착석 기회는 낮게 봤습니다.");
+  } else if (primary && primary.remainingStops >= 3) {
     reasons.push("목적지보다 충분히 앞선 구간에서 앉을각이 생길 가능성이 있습니다.");
   } else {
     reasons.push("도착 임박 구간의 기회는 낮게 반영했습니다.");
@@ -504,6 +511,49 @@ function toHintRelation(contribution: Contribution, candidate: Candidate): strin
 
 function formatDoor(position: { carNo: number; doorNo: number }): string {
   return `${position.carNo}-${position.doorNo} 문`;
+}
+
+function getArrivalWindowScoreCap(contributions: Contribution[]) {
+  if (contributions.some((contribution) => !contribution.arrivalImminent)) {
+    return 100;
+  }
+
+  const primary = contributions[0];
+  if (!primary) {
+    return 100;
+  }
+  if (primary.remainingStops <= 1) {
+    return 36;
+  }
+  if (primary.remainingStops <= 2) {
+    return 50;
+  }
+  if (primary.remainingStops <= 3) {
+    return 62;
+  }
+  return 100;
+}
+
+function isArrivalImminentStop(totalStops: number, stationsAfter: number) {
+  return totalStops >= 6 && stationsAfter <= 2;
+}
+
+function getDistanceWeight(stationsAfter: number, progress: number, totalStops: number) {
+  if (totalStops >= 6) {
+    if (stationsAfter <= 1) {
+      return 0.005;
+    }
+    if (stationsAfter <= 2) {
+      return 0.015;
+    }
+    if (stationsAfter <= 3) {
+      return 0.18;
+    }
+  }
+
+  const remainingStopsPenalty = stationsAfter <= 1 ? 0.38 : stationsAfter <= 2 ? 0.22 : stationsAfter <= 3 ? 0.1 : 0;
+  const arrivalPenalty = progress > 0.64 ? (progress - 0.64) * 0.88 : 0;
+  return clamp(1 - Math.max(remainingStopsPenalty, arrivalPenalty), 0.25, 1);
 }
 
 function roundToTenth(value: number): number {
