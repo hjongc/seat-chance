@@ -130,6 +130,7 @@ async function ingestStationOrder() {
   ]);
   const lineRows = rows
     .filter((row) => normalizeLineNo(pick(row, ["LINE_NUM", "호선"])) === targetLineNo)
+    .filter((row) => shouldKeepStationOrderRow(row))
     .sort((left, right) => stationOrder(left) - stationOrder(right));
 
   if (lineRows.length === 0) {
@@ -971,6 +972,12 @@ function pick(row, keys) {
 function normalizeLineNo(value) {
   const text = stringValue(value);
   const compact = text.replace(/\s/g, "");
+  if (compact.includes("인천") && compact.includes("2")) {
+    return "인천2";
+  }
+  if (compact.includes("인천") && compact.includes("1")) {
+    return "인천";
+  }
   if (compact.includes("공항")) {
     return "공항철도";
   }
@@ -1005,9 +1012,25 @@ function normalizeLineNo(value) {
   return String(Number(match[0]));
 }
 
+function shouldKeepStationOrderRow(row) {
+  if (targetLineNo !== "2") {
+    return true;
+  }
+
+  return isSeoulLineTwoMainLoopStationCode(pick(row, ["STATION_CD", "역코드", "전철역코드"]));
+}
+
+function isSeoulLineTwoMainLoopStationCode(value) {
+  const code = stringValue(value).padStart(4, "0");
+  return /^02(0[1-9]|[1-3][0-9]|4[0-3])$/.test(code);
+}
+
 function lineLabel(lineNo) {
   if (/^\d+$/.test(lineNo)) {
     return `${lineNo}호선`;
+  }
+  if (/^인천\d+$/.test(lineNo)) {
+    return `${lineNo.replace("인천", "인천 ")}호선`;
   }
   return lineNo.endsWith("철도") ? lineNo : `${lineNo}선`;
 }

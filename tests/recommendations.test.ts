@@ -839,3 +839,161 @@ test("ignores arrival-imminent line 2 hints on longer routes", () => {
   assert.equal(result.recommendations[0].expected_seat_window, "사당");
   assert.doesNotMatch(result.recommendations[0].expected_seat_window, /강남|역삼/);
 });
+
+test("orders expected seat window by travel order on reverse routes", () => {
+  const reverseDataset: SeatChanceDataset = {
+    stations: ["A", "B", "C", "D", "E", "F"].map((stationName, index) => ({
+      operator: "test",
+      lineNo: "9",
+      stationCode: `L9-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "test",
+        lineNo: "9",
+        branchCode: "MAIN",
+        direction: "A",
+        carCount: 3,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      ["E", 100, 6000],
+      ["D", 100, 5000],
+      ["C", 100, 2000]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "9",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "E",
+        direction: "A",
+        carNo: 2,
+        doorNo: 2,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      },
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "D",
+        direction: "A",
+        carNo: 2,
+        doorNo: 3,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "F",
+      destination: "A",
+      lineNo: "9",
+      direction: "A",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    reverseDataset
+  );
+
+  assert.equal(result.recommendations[0].expected_seat_window, "E~D");
+});
+
+test("does not advertise weak early signals when arrival-imminent demand dominates", () => {
+  const mixedSignalDataset: SeatChanceDataset = {
+    stations: ["O", "A", "B", "C", "D", "E", "F", "G", "H"].map((stationName, index) => ({
+      operator: "test",
+      lineNo: "9",
+      stationCode: `L9-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [
+      {
+        operator: "test",
+        lineNo: "9",
+        branchCode: "MAIN",
+        direction: "H",
+        carCount: 3,
+        doorsPerCar: 4,
+        source: "test fixture",
+        confidence: 0.9,
+        validFrom: "2026-05-01",
+        validTo: null
+      }
+    ],
+    ridershipProfiles: [
+      ["B", 10, 50],
+      ["G", 100, 10000]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "9",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "G",
+        direction: "H",
+        carNo: 1,
+        doorNo: 1,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "O",
+      destination: "H",
+      lineNo: "9",
+      direction: "H",
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      mode: "seat"
+    },
+    mixedSignalDataset
+  );
+
+  assert.equal(result.recommendations[0].grade, "LOW");
+  assert.equal(result.recommendations[0].expected_seat_window, "도착 임박 구간");
+  assert.ok(result.recommendations.every((recommendation) => recommendation.expected_seat_window !== "B"));
+  assert.ok(result.recommendations[0].reasons.some((reason) => reason.includes("목적지 직전")));
+});

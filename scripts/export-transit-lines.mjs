@@ -79,6 +79,9 @@ function lineLabel(lineNo) {
   if (/^\d+$/.test(lineNo)) {
     return `${lineNo}호선`;
   }
+  if (/^인천\d+$/.test(lineNo)) {
+    return `${lineNo.replace("인천", "인천 ")}호선`;
+  }
   return lineNo.endsWith("철도") ? lineNo : `${lineNo}선`;
 }
 

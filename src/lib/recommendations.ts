@@ -32,6 +32,8 @@ interface Contribution {
   arrivalImminent: boolean;
 }
 
+const actionableSignalThreshold = 0.75;
+
 export function recommendSeatPositions(
   request: RecommendationRequest,
   dataset: SeatChanceDataset
@@ -407,11 +409,9 @@ function toGrade(score: number) {
 }
 
 function toExpectedSeatWindow(contributions: Contribution[]): string {
-  const hintedContributions = contributions.filter((contribution) => contribution.hint);
-  const actionableHintedContributions = hintedContributions.filter((contribution) => !contribution.arrivalImminent);
-  const actionableContributions = contributions.filter((contribution) => !contribution.arrivalImminent);
-  const keyStations = actionableHintedContributions.slice(0, 2);
-  keyStations.sort((left, right) => left.sequenceNo - right.sequenceNo);
+  const actionableContributions = actionableWindowContributions(contributions);
+  const keyStations = actionableContributions.filter((contribution) => contribution.hint).slice(0, 2);
+  keyStations.sort(compareByTravelOrder);
 
   if (keyStations.length >= 2) {
     return `${keyStations[0].stationName}~${keyStations[1].stationName}`;
@@ -430,7 +430,7 @@ function toExpectedSeatWindow(contributions: Contribution[]): string {
 
 function toReasons(contributions: Contribution[], candidate: Candidate): string[] {
   const reasons: string[] = [];
-  const primary = contributions.find((contribution) => contribution.hint) ?? contributions[0];
+  const primary = primaryContribution(contributions);
   const secondary = contributions.find(
     (contribution) => contribution.hint && contribution.stationName !== primary?.stationName
   );
@@ -514,7 +514,7 @@ function formatDoor(position: { carNo: number; doorNo: number }): string {
 }
 
 function getArrivalWindowScoreCap(contributions: Contribution[]) {
-  if (contributions.some((contribution) => !contribution.arrivalImminent)) {
+  if (hasActionableSignal(contributions)) {
     return 100;
   }
 
@@ -532,6 +532,36 @@ function getArrivalWindowScoreCap(contributions: Contribution[]) {
     return 62;
   }
   return 100;
+}
+
+function primaryContribution(contributions: Contribution[]) {
+  const hintedPrimary = contributions.find((contribution) => contribution.hint) ?? contributions[0];
+  if (!hintedPrimary?.arrivalImminent) {
+    return hintedPrimary;
+  }
+
+  const actionableHinted = actionableWindowContributions(contributions).find((contribution) => contribution.hint);
+  return actionableHinted ?? hintedPrimary;
+}
+
+function actionableWindowContributions(contributions: Contribution[]) {
+  const primary = contributions[0];
+  const actionableContributions = contributions.filter((contribution) => !contribution.arrivalImminent);
+  if (!primary?.arrivalImminent) {
+    return actionableContributions;
+  }
+
+  return actionableContributions.filter(
+    (contribution) => contribution.score >= primary.score * actionableSignalThreshold
+  );
+}
+
+function hasActionableSignal(contributions: Contribution[]) {
+  return actionableWindowContributions(contributions).length > 0;
+}
+
+function compareByTravelOrder(left: Contribution, right: Contribution) {
+  return right.remainingStops - left.remainingStops;
 }
 
 function isArrivalImminentStop(totalStops: number, stationsAfter: number) {
