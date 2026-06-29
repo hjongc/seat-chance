@@ -46,7 +46,7 @@ GET /api/v1/recommendations?origin=경복궁&destination=신사&line_no=3&direct
       "door_no": 3,
       "score": 82.4,
       "grade": "HIGH",
-      "expected_seat_window": "종로3가~충무로",
+      "expected_seat_window": "종로3가 → 충무로",
       "reasons": [
         "종로3가 하차/환승 흐름과 직접 맞아 좌석 회전 신호가 큽니다."
       ]

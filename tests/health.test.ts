@@ -15,6 +15,7 @@ const readyStatus: DataStatus = {
     transfer_door: 10,
     exit_or_facility_door: 10
   },
+  lineCoverage: [],
   lastIngestion: null,
   lastSuccessfulIngestion: {
     sourceName: "서울 열린데이터광장 CardSubwayTime",

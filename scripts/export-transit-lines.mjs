@@ -7,6 +7,7 @@ const { Pool } = pg;
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const outputPath = join(rootDir, "public", "transit-lines.json");
 const optional = process.argv.includes("--optional");
+const publicLineNos = publicTransitLineNos();
 
 await loadLocalEnv();
 
@@ -36,11 +37,13 @@ try {
   const result = await pool.query(`
     select line_no, station_code, station_name, sequence_no
     from station_line_order
+    where line_no = any($1)
+      and (line_no <> '2' or station_code ~ '^02(0[1-9]|[1-3][0-9]|4[0-3])$')
     order by
       case when line_no ~ '^[0-9]+$' then line_no::int else 999999 end,
       line_no,
       sequence_no
-  `);
+  `, [publicLineNos]);
 
   const lines = [];
   for (const row of result.rows) {
@@ -63,7 +66,7 @@ try {
 
   await writeTransitLines({
     generated_at: new Date().toISOString(),
-    lines
+    lines: assertTransitLines(lines)
   });
 } finally {
   await pool.end();
@@ -73,6 +76,42 @@ async function writeTransitLines(payload) {
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(`${outputPath}.tmp`, `${JSON.stringify(payload, null, 2)}\n`);
   await rename(`${outputPath}.tmp`, outputPath);
+}
+
+function assertTransitLines(lines) {
+  const lineTwo = lines.find((line) => line.line_no === "2");
+  if (lineTwo && lineTwo.stations.length !== 43) {
+    throw new Error(`Line 2 main loop station count must be 43, got ${lineTwo.stations.length}.`);
+  }
+  return lines;
+}
+
+function publicTransitLineNos() {
+  const configured = process.env.PUBLIC_TRANSIT_LINE_NOS;
+  const lineNos = configured
+    ? configured.split(/[,\s;]+/).map((lineNo) => lineNo.trim()).filter(Boolean)
+    : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "경의중앙",
+        "경춘",
+        "공항철도",
+        "김포골드",
+        "서해",
+        "수인분당",
+        "신림",
+        "신분당",
+        "우이신설",
+        "인천2"
+      ];
+  return [...new Set(lineNos)];
 }
 
 function lineLabel(lineNo) {

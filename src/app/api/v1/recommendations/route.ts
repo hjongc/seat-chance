@@ -133,5 +133,5 @@ function recommendationCacheKey({
   dayType: string;
   timeSlot: string;
 }) {
-  return ["seat-v9", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
+  return ["seat-v11", lineNo, direction, dayType, timeSlot, origin, destination].join("|");
 }

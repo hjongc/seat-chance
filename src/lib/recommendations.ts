@@ -155,10 +155,7 @@ export function recommendSeatPositions(
     day_type: dayType,
     time_slot: usedTimeSlot,
     recommendations,
-    cautions: [
-      "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다.",
-      "실제 열차 혼잡, 지연, 행사, 날씨 등은 반영되지 않을 수 있습니다."
-    ]
+    cautions: recommendationCautions(layout, congestion)
   };
 }
 
@@ -394,6 +391,23 @@ function getCongestionPenalty(profile: CongestionProfile | undefined): number {
   return clamp((profile.congestionPct - 100) * 0.28, 0, 22);
 }
 
+function recommendationCautions(layout: TrainLayout, congestion: CongestionProfile | undefined) {
+  const cautions = [
+    "앉을각 점수는 실제 착석 확률이 아니라 동일 경로 내 상대 추천 점수입니다."
+  ];
+
+  if (layout.confidence < 0.5) {
+    cautions.push("열차 편성은 확인된 칸문 데이터와 기본 편성값을 기준으로 추정했습니다.");
+  }
+  if (!congestion) {
+    cautions.push("혼잡도 데이터가 없어 승하차·환승문·빠른하차문 신호 중심으로 계산했습니다.");
+  } else {
+    cautions.push("실제 열차 혼잡, 지연, 행사, 날씨 등은 반영되지 않을 수 있습니다.");
+  }
+
+  return cautions;
+}
+
 function stationCrowdingFactor(congestionPct: number): number {
   return clamp(1.08 - Math.max(congestionPct - 70, 0) * 0.003, 0.62, 1.08);
 }
@@ -410,11 +424,14 @@ function toGrade(score: number) {
 
 function toExpectedSeatWindow(contributions: Contribution[]): string {
   const actionableContributions = actionableWindowContributions(contributions);
-  const keyStations = actionableContributions.filter((contribution) => contribution.hint).slice(0, 2);
+  const keyStations = uniqueStationContributions([
+    ...actionableContributions.filter((contribution) => contribution.hint),
+    ...actionableContributions
+  ]).slice(0, 2);
   keyStations.sort(compareByTravelOrder);
 
   if (keyStations.length >= 2) {
-    return `${keyStations[0].stationName}~${keyStations[1].stationName}`;
+    return `${keyStations[0].stationName} → ${keyStations[1].stationName}`;
   }
   if (keyStations.length === 1) {
     return keyStations[0].stationName;
@@ -426,6 +443,21 @@ function toExpectedSeatWindow(contributions: Contribution[]): string {
   }
 
   return contributions[0] ? "도착 임박 구간" : "중간역";
+}
+
+function uniqueStationContributions(contributions: Contribution[]) {
+  const seen = new Set<string>();
+  const uniqueContributions: Contribution[] = [];
+
+  for (const contribution of contributions) {
+    if (seen.has(contribution.stationName)) {
+      continue;
+    }
+    seen.add(contribution.stationName);
+    uniqueContributions.push(contribution);
+  }
+
+  return uniqueContributions;
 }
 
 function toReasons(contributions: Contribution[], candidate: Candidate): string[] {

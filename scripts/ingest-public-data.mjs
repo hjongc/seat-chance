@@ -14,6 +14,7 @@ const seoulApiKey = requiredEnv("SEOUL_OPEN_API_KEY");
 const dataGoKrApiKey = process.env.DATA_GO_KR_API_KEY ?? "";
 const databaseUrl = requiredEnv("DATABASE_URL");
 const configuredTargetLineNos = parseTargetLineNos(process.env.TARGET_LINE_NO);
+const publicLineNos = publicTransitLineNos();
 const ingestFetchTimeoutMs = toPositiveInt(process.env.INGEST_REQUEST_TIMEOUT_MS, 60000);
 const ingestFetchAttempts = Math.min(Math.max(toPositiveInt(process.env.INGEST_FETCH_ATTEMPTS, 3), 1), 8);
 const defaultCsvUrls = {
@@ -132,6 +133,7 @@ async function ingestStationOrder() {
     .filter((row) => normalizeLineNo(pick(row, ["LINE_NUM", "호선"])) === targetLineNo)
     .filter((row) => shouldKeepStationOrderRow(row))
     .sort((left, right) => stationOrder(left) - stationOrder(right));
+  assertStationOrderRows(lineRows);
 
   if (lineRows.length === 0) {
     throw new Error(`No station rows returned for line ${targetLineNo}.`);
@@ -701,7 +703,7 @@ async function fetchSeoulRows(service, tailSegments = []) {
   }
 
   for (let start = 1001; start <= total; start += 1000) {
-    const nextUrl = seoulUrl(service, start, Math.min(start + 999, total), safeTailSegments);
+    const nextUrl = seoulUrl(service, start, Math.min(start + 999, total), tailSegments);
     const next = await fetchJson(nextUrl);
     const nextPayload = next[service] ?? next[Object.keys(next)[0]];
     assertSeoulPayload(nextPayload, nextUrl);
@@ -1020,6 +1022,28 @@ function shouldKeepStationOrderRow(row) {
   return isSeoulLineTwoMainLoopStationCode(pick(row, ["STATION_CD", "역코드", "전철역코드"]));
 }
 
+function assertStationOrderRows(lineRows) {
+  if (targetLineNo !== "2") {
+    return;
+  }
+
+  const pollutedRows = lineRows.filter(
+    (row) => !isSeoulLineTwoMainLoopStationCode(pick(row, ["STATION_CD", "역코드", "전철역코드"]))
+  );
+  if (pollutedRows.length > 0) {
+    throw new Error(
+      `Line 2 station order contains non-main-loop rows: ${pollutedRows
+        .slice(0, 5)
+        .map((row) => `${pick(row, ["STATION_CD", "역코드", "전철역코드"])} ${pick(row, ["STATION_NM", "역명"])}`)
+        .join(", ")}`
+    );
+  }
+
+  if (lineRows.length !== 43) {
+    throw new Error(`Line 2 main loop station count must be 43, got ${lineRows.length}.`);
+  }
+}
+
 function isSeoulLineTwoMainLoopStationCode(value) {
   const code = stringValue(value).padStart(4, "0");
   return /^02(0[1-9]|[1-3][0-9]|4[0-3])$/.test(code);
@@ -1108,11 +1132,14 @@ async function exportTransitLines() {
     `
       select line_no, station_code, station_name, sequence_no
       from station_line_order
+      where line_no = any($1)
+        and (line_no <> '2' or station_code ~ '^02(0[1-9]|[1-3][0-9]|4[0-3])$')
       order by
         case when line_no ~ '^[0-9]+$' then line_no::int else 999999 end,
         line_no,
         sequence_no
-    `
+    `,
+    [publicLineNos]
   );
   const lines = [];
 
@@ -1135,10 +1162,46 @@ async function exportTransitLines() {
   }
 
   const outputPath = join(rootDir, "public", "transit-lines.json");
+  assertTransitLines(lines);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(`${outputPath}.tmp`, `${JSON.stringify({ generated_at: new Date().toISOString(), lines }, null, 2)}\n`);
   await rename(`${outputPath}.tmp`, outputPath);
   console.log(`transit-lines.json: ${lines.length} lines`);
+}
+
+function assertTransitLines(lines) {
+  const lineTwo = lines.find((line) => line.line_no === "2");
+  if (lineTwo && lineTwo.stations.length !== 43) {
+    throw new Error(`Line 2 main loop station count must be 43, got ${lineTwo.stations.length}.`);
+  }
+}
+
+function publicTransitLineNos() {
+  const configured = process.env.PUBLIC_TRANSIT_LINE_NOS;
+  const lineNos = configured
+    ? configured.split(/[,\s;]+/).map((lineNo) => lineNo.trim()).filter(Boolean)
+    : [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "경의중앙",
+        "경춘",
+        "공항철도",
+        "김포골드",
+        "서해",
+        "수인분당",
+        "신림",
+        "신분당",
+        "우이신설",
+        "인천2"
+      ];
+  return [...new Set(lineNos)];
 }
 
 function stationOrder(row) {

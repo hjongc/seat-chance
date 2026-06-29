@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { recommendSeatPositions } from "../src/lib/recommendations";
-import { currentKoreaDayType, isKoreanPublicHoliday } from "../src/lib/day-type";
+import {
+  currentKoreaDateInputValue,
+  currentKoreaDayType,
+  dayTypeForKoreaDateInputValue,
+  isKoreanPublicHoliday
+} from "../src/lib/day-type";
 import { toDayType, toTimeSlot } from "../src/lib/time";
 import type { SeatChanceDataset } from "../src/lib/types";
 
@@ -171,6 +176,68 @@ test("applies a meaningful penalty during heavier congestion windows", () => {
   assert.ok(congestedResult.recommendations[0].score < 75);
 });
 
+test("supports limited recommendations when only estimated layout and no congestion are available", () => {
+  const limitedDataset: SeatChanceDataset = {
+    stations: ["개화", "김포공항", "마곡나루", "당산", "여의도"].map((stationName, index) => ({
+      operator: "서울시메트로9호선",
+      lineNo: "9",
+      stationCode: `9-${index + 1}`,
+      stationName,
+      sequenceNo: index + 1
+    })),
+    trainLayouts: [],
+    ridershipProfiles: [
+      ["김포공항", 1200, 2100],
+      ["마곡나루", 900, 1800],
+      ["당산", 700, 3400]
+    ].map(([stationName, boardings, alightings]) => ({
+      lineNo: "9",
+      stationName: String(stationName),
+      dayType: "WEEKDAY",
+      timeSlot: "08:00",
+      boardings: Number(boardings),
+      alightings: Number(alightings),
+      source: "test fixture",
+      observedMonth: "2026-05-01"
+    })),
+    congestionProfiles: [],
+    stationCongestionProfiles: [],
+    transferDemandProfiles: [],
+    doorHints: [
+      {
+        kind: "transfer",
+        lineNo: "9",
+        stationName: "당산",
+        direction: "여의도",
+        carNo: 6,
+        doorNo: 4,
+        weight: 1,
+        description: "환승 동선",
+        source: "test fixture",
+        confidence: 0.8
+      }
+    ]
+  };
+
+  const result = recommendSeatPositions(
+    {
+      origin: "개화",
+      destination: "여의도",
+      lineNo: "9",
+      direction: "여의도",
+      dayType: "WEEKDAY",
+      timeSlot: "08:30",
+      mode: "seat"
+    },
+    limitedDataset
+  );
+
+  assert.equal(result.recommendations.length, 3);
+  assert.ok(result.recommendations.some((item) => item.car_no === 6 && item.door_no === 4));
+  assert.match(result.cautions.join(" "), /열차 편성은 .*추정/);
+  assert.match(result.cautions.join(" "), /혼잡도 데이터가 없어/);
+});
+
 test("describes exact and nearby door recommendations differently", () => {
   const doorDataset: SeatChanceDataset = {
     stations: ["출발", "환승역", "도착"].map((stationName, index) => ({
@@ -266,6 +333,13 @@ test("treats Korean public holidays as weekend day type", () => {
   assert.equal(toDayType("2026-05-01T08:00:00+09:00"), "WEEKEND");
   assert.equal(toDayType("2026-05-05T08:00:00+09:00"), "WEEKEND");
   assert.equal(toDayType("2026-07-17T08:00:00+09:00"), "WEEKEND");
+});
+
+test("derives automatic day type from Korean date input values", () => {
+  assert.equal(currentKoreaDateInputValue(new Date("2026-06-28T15:10:00Z")), "2026-06-29");
+  assert.equal(dayTypeForKoreaDateInputValue("2026-06-29"), "WEEKDAY");
+  assert.equal(dayTypeForKoreaDateInputValue("2026-06-28"), "WEEKEND");
+  assert.equal(dayTypeForKoreaDateInputValue("2026-05-01"), "WEEKEND");
 });
 
 test("supports substitute holidays for modern supplemental Korean holidays", () => {
@@ -921,7 +995,7 @@ test("orders expected seat window by travel order on reverse routes", () => {
     reverseDataset
   );
 
-  assert.equal(result.recommendations[0].expected_seat_window, "E~D");
+  assert.equal(result.recommendations[0].expected_seat_window, "E → D");
 });
 
 test("does not advertise weak early signals when arrival-imminent demand dominates", () => {

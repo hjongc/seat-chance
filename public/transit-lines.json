@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11T00:32:15.828Z",
+  "generated_at": "2026-06-29T02:00:14.991Z",
   "lines": [
     {
       "line_no": "1",
@@ -241,13 +241,13 @@
           "sequence_no": 47
         },
         {
-          "station_code": "1801",
-          "station_name": "개봉",
+          "station_code": "1714",
+          "station_name": "독산",
           "sequence_no": 48
         },
         {
-          "station_code": "1714",
-          "station_name": "독산",
+          "station_code": "1801",
+          "station_name": "개봉",
           "sequence_no": 49
         },
         {
@@ -256,13 +256,13 @@
           "sequence_no": 50
         },
         {
-          "station_code": "1802",
-          "station_name": "오류동",
+          "station_code": "1750",
+          "station_name": "광명",
           "sequence_no": 51
         },
         {
-          "station_code": "1750",
-          "station_name": "광명",
+          "station_code": "1802",
+          "station_name": "오류동",
           "sequence_no": 52
         },
         {
@@ -276,23 +276,23 @@
           "sequence_no": 54
         },
         {
-          "station_code": "1705",
-          "station_name": "관악",
+          "station_code": "1803",
+          "station_name": "역곡",
           "sequence_no": 55
         },
         {
-          "station_code": "1803",
-          "station_name": "역곡",
+          "station_code": "1705",
+          "station_name": "관악",
           "sequence_no": 56
-        },
-        {
-          "station_code": "1814",
-          "station_name": "소사",
-          "sequence_no": 57
         },
         {
           "station_code": "1706",
           "station_name": "안양",
+          "sequence_no": 57
+        },
+        {
+          "station_code": "1814",
+          "station_name": "소사",
           "sequence_no": 58
         },
         {
@@ -326,33 +326,33 @@
           "sequence_no": 64
         },
         {
-          "station_code": "1815",
-          "station_name": "부개",
+          "station_code": "1729",
+          "station_name": "당정",
           "sequence_no": 65
         },
         {
-          "station_code": "1729",
-          "station_name": "당정",
+          "station_code": "1815",
+          "station_name": "부개",
           "sequence_no": 66
-        },
-        {
-          "station_code": "1806",
-          "station_name": "부평",
-          "sequence_no": 67
         },
         {
           "station_code": "1710",
           "station_name": "의왕",
-          "sequence_no": 68
+          "sequence_no": 67
         },
         {
-          "station_code": "1807",
-          "station_name": "백운",
-          "sequence_no": 69
+          "station_code": "1806",
+          "station_name": "부평",
+          "sequence_no": 68
         },
         {
           "station_code": "1711",
           "station_name": "성균관대",
+          "sequence_no": 69
+        },
+        {
+          "station_code": "1807",
+          "station_name": "백운",
           "sequence_no": 70
         },
         {
@@ -376,58 +376,58 @@
           "sequence_no": 74
         },
         {
-          "station_code": "1809",
-          "station_name": "주안",
+          "station_code": "1715",
+          "station_name": "세류",
           "sequence_no": 75
         },
         {
-          "station_code": "1715",
-          "station_name": "세류",
+          "station_code": "1809",
+          "station_name": "주안",
           "sequence_no": 76
-        },
-        {
-          "station_code": "1823",
-          "station_name": "도화",
-          "sequence_no": 77
         },
         {
           "station_code": "1749",
           "station_name": "서동탄",
-          "sequence_no": 78
+          "sequence_no": 77
         },
         {
           "station_code": "1716",
           "station_name": "병점",
-          "sequence_no": 79
+          "sequence_no": 78
         },
         {
-          "station_code": "1810",
-          "station_name": "제물포",
-          "sequence_no": 80
+          "station_code": "1823",
+          "station_name": "도화",
+          "sequence_no": 79
         },
         {
           "station_code": "1717",
           "station_name": "세마",
-          "sequence_no": 81
+          "sequence_no": 80
         },
         {
-          "station_code": "1817",
-          "station_name": "도원",
-          "sequence_no": 82
+          "station_code": "1810",
+          "station_name": "제물포",
+          "sequence_no": 81
         },
         {
           "station_code": "1718",
           "station_name": "오산대",
-          "sequence_no": 83
+          "sequence_no": 82
         },
         {
-          "station_code": "1811",
-          "station_name": "동인천",
-          "sequence_no": 84
+          "station_code": "1817",
+          "station_name": "도원",
+          "sequence_no": 83
         },
         {
           "station_code": "1719",
           "station_name": "오산",
+          "sequence_no": 84
+        },
+        {
+          "station_code": "1811",
+          "station_name": "동인천",
           "sequence_no": 85
         },
         {
@@ -1425,53 +1425,53 @@
           "sequence_no": 39
         },
         {
-          "station_code": "2550",
-          "station_name": "길동",
+          "station_code": "2555",
+          "station_name": "둔촌동",
           "sequence_no": 40
         },
         {
-          "station_code": "2555",
-          "station_name": "둔촌동",
+          "station_code": "2550",
+          "station_name": "길동",
           "sequence_no": 41
-        },
-        {
-          "station_code": "2551",
-          "station_name": "굽은다리",
-          "sequence_no": 42
         },
         {
           "station_code": "2556",
           "station_name": "올림픽공원",
-          "sequence_no": 43
+          "sequence_no": 42
         },
         {
-          "station_code": "2552",
-          "station_name": "명일",
-          "sequence_no": 44
+          "station_code": "2551",
+          "station_name": "굽은다리",
+          "sequence_no": 43
         },
         {
           "station_code": "2557",
           "station_name": "방이",
-          "sequence_no": 45
+          "sequence_no": 44
         },
         {
-          "station_code": "2553",
-          "station_name": "고덕",
-          "sequence_no": 46
+          "station_code": "2552",
+          "station_name": "명일",
+          "sequence_no": 45
         },
         {
           "station_code": "2558",
           "station_name": "오금",
-          "sequence_no": 47
+          "sequence_no": 46
         },
         {
-          "station_code": "2554",
-          "station_name": "상일동",
-          "sequence_no": 48
+          "station_code": "2553",
+          "station_name": "고덕",
+          "sequence_no": 47
         },
         {
           "station_code": "2559",
           "station_name": "개롱",
+          "sequence_no": 48
+        },
+        {
+          "station_code": "2554",
+          "station_name": "상일동",
           "sequence_no": 49
         },
         {

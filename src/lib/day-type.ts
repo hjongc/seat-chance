@@ -31,6 +31,28 @@ export function currentKoreaDayType(now = new Date()): DayType {
   return dayTypeForKoreaDate(toKoreaDateParts(now));
 }
 
+export function currentKoreaDateInputValue(now = new Date()): string {
+  const parts = toKoreaDateParts(now);
+  return koreaDateInputValue(parts.year, parts.month, parts.day);
+}
+
+export function dayTypeForKoreaDateInputValue(value: string): DayType {
+  const match = value.match(/^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/);
+  if (!match?.groups) {
+    throw new Error("Korea date input must be formatted as YYYY-MM-DD.");
+  }
+
+  const year = Number(match.groups.year);
+  const month = Number(match.groups.month);
+  const day = Number(match.groups.day);
+  return dayTypeForKoreaDate({
+    year,
+    month,
+    day,
+    weekday: weekdayForPlainDate(year, month, day)
+  });
+}
+
 export function dayTypeForKoreaDate(parts: KoreaDateParts): DayType {
   if (parts.weekday === "Sat" || parts.weekday === "Sun") {
     return "WEEKEND";
@@ -125,6 +147,15 @@ function sameLocalDate(left: Date, right: Date) {
 
 function holidayKey(year: number, holiday: SupplementalHoliday) {
   return `${year}-${String(holiday.month).padStart(2, "0")}-${String(holiday.day).padStart(2, "0")}`;
+}
+
+function koreaDateInputValue(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function weekdayForPlainDate(year: number, month: number, day: number) {
+  const weekdayIndex = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][weekdayIndex];
 }
 
 function localDateKey(date: Date) {

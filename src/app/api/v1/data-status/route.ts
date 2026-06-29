@@ -25,7 +25,23 @@ export async function GET() {
               row_count: status.lastSuccessfulIngestion.rowCount,
               finished_at: status.lastSuccessfulIngestion.finishedAt
             }
-          : null
+          : null,
+        line_coverage: status.lineCoverage.map((line) => ({
+          line_no: line.lineNo,
+          station_rows: line.stationRows,
+          raw_station_rows: line.rawStationRows,
+          ridership_rows: line.ridershipRows,
+          train_layout_rows: line.trainLayoutRows,
+          estimated_train_layout: line.estimatedTrainLayout,
+          congestion_rows: line.congestionRows,
+          door_hint_rows: line.doorHintRows,
+          station_congestion_rows: line.stationCongestionRows,
+          transfer_demand_rows: line.transferDemandRows,
+          missing_recommendation_inputs: line.missingRecommendationInputs,
+          quality_warnings: line.qualityWarnings,
+          recommendable: line.recommendable
+        })),
+        recommendable_line_count: status.lineCoverage.filter((line) => line.recommendable).length
       },
       "public, max-age=15, s-maxage=60, stale-while-revalidate=300"
     );

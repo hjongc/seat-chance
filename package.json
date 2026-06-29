@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
     "db:ingest": "node scripts/ingest-public-data.mjs",
+    "db:audit": "node scripts/audit-data.mjs",
+    "data:probe": "node scripts/probe-public-data.mjs",
     "export:transit-lines": "node scripts/export-transit-lines.mjs"
   },
   "dependencies": {

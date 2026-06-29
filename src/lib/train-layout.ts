@@ -12,6 +12,10 @@ const defaultCarCounts: Record<string, number> = {
   "9": 6
 };
 
+export function hasFallbackTrainLayout(lineNo: string) {
+  return defaultCarCounts[lineNo] !== undefined;
+}
+
 export function fallbackTrainLayout(lineNo: string, direction: DirectionCode): TrainLayout {
   return {
     operator: "서울교통공사",

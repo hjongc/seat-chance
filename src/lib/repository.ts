@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { hasFallbackTrainLayout } from "./train-layout";
 import type {
   DayType,
   DirectionCode,
@@ -20,6 +21,7 @@ export interface DataStatus {
   status: DataStatusCode;
   message: string;
   counts: Record<string, number>;
+  lineCoverage: LineDataCoverage[];
   lastIngestion: {
     sourceName: string;
     status: string;
@@ -32,6 +34,22 @@ export interface DataStatus {
     rowCount: number;
     finishedAt: string | null;
   } | null;
+}
+
+export interface LineDataCoverage {
+  lineNo: string;
+  stationRows: number;
+  rawStationRows: number;
+  ridershipRows: number;
+  trainLayoutRows: number;
+  estimatedTrainLayout: boolean;
+  congestionRows: number;
+  doorHintRows: number;
+  stationCongestionRows: number;
+  transferDemandRows: number;
+  missingRecommendationInputs: string[];
+  qualityWarnings: string[];
+  recommendable: boolean;
 }
 
 export interface SeatChanceRepository {
@@ -83,6 +101,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
           sequence_no as "sequenceNo"
         from station_line_order
         where line_no = $1
+          and (${lineTwoMainLoopStationSql("$1")})
         order by sequence_no
       `,
       [lineNo]
@@ -97,6 +116,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
         line_no as "lineNo",
         count(*)::text as "stationCount"
       from station_line_order
+      where ${lineTwoMainLoopStationSql("line_no")}
       group by line_no
       order by
         case when line_no ~ '^[0-9]+$' then line_no::int else 999999 end,
@@ -210,6 +230,7 @@ class PostgresSeatChanceRepository implements SeatChanceRepository {
               sequence_no as "sequenceNo"
             from station_line_order
             where line_no = $1
+              and (${lineTwoMainLoopStationSql("$1")})
             order by sequence_no
           `,
           [lineNo]
@@ -421,6 +442,7 @@ export async function getDataStatus(): Promise<DataStatus> {
       status: "MISSING_DATABASE_URL",
       message: "DATABASE_URL이 없어 DB에서 데이터를 읽을 수 없습니다.",
       counts: {},
+      lineCoverage: [],
       lastIngestion: null,
       lastSuccessfulIngestion: null
     };
@@ -447,6 +469,7 @@ export async function getDataStatus(): Promise<DataStatus> {
         status: "SCHEMA_MISSING",
         message: `DB는 연결됐지만 스키마가 없습니다: ${missingTables.join(", ")}`,
         counts: {},
+        lineCoverage: [],
         lastIngestion: null,
         lastSuccessfulIngestion: null
       };
@@ -454,6 +477,7 @@ export async function getDataStatus(): Promise<DataStatus> {
 
     const countTables = statusTables.filter((tableName) => existingTables.has(tableName));
     const counts = await readTableCounts(statusPool, countTables);
+    const lineCoverage = await readLineCoverage(statusPool, existingTables);
     const lastIngestion = await readLastIngestion(statusPool);
     const lastSuccessfulIngestion = await readLastSuccessfulIngestion(statusPool);
     const emptyTables = requiredTables.filter((tableName) => counts[tableName] === 0);
@@ -464,6 +488,7 @@ export async function getDataStatus(): Promise<DataStatus> {
         status: "DATA_MISSING",
         message: `DB는 연결됐지만 추천에 필요한 데이터가 비어 있습니다: ${emptyTables.join(", ")}`,
         counts,
+        lineCoverage,
         lastIngestion,
         lastSuccessfulIngestion
       };
@@ -474,6 +499,7 @@ export async function getDataStatus(): Promise<DataStatus> {
       status: "READY",
       message: "DB 연결과 필수 데이터 적재가 완료됐습니다.",
       counts,
+      lineCoverage,
       lastIngestion,
       lastSuccessfulIngestion
     };
@@ -488,6 +514,7 @@ export async function getDataStatus(): Promise<DataStatus> {
             ? error.message
             : "DB 상태를 확인하지 못했습니다.",
       counts: {},
+      lineCoverage: [],
       lastIngestion: null,
       lastSuccessfulIngestion: null
     };
@@ -507,6 +534,158 @@ async function readTableCounts(pool: Pool, tableNames: readonly string[]): Promi
   return Object.fromEntries(entries);
 }
 
+async function readLineCoverage(pool: Pool, existingTables: Set<string>): Promise<LineDataCoverage[]> {
+  if (!existingTables.has("station_line_order")) {
+    return [];
+  }
+
+  const result = await pool.query<{
+    lineNo: string;
+    stationRows: string;
+    rawStationRows: string;
+    ridershipRows: string;
+    trainLayoutRows: string;
+    congestionRows: string;
+    transferDoorRows: string;
+    facilityDoorRows: string;
+    stationCongestionRows: string;
+    transferDemandRows: string;
+  }>(`
+    with lines as (
+      select line_no from station_line_order
+      union select line_no from ridership_profile
+      union select line_no from train_layout
+      union select line_no from congestion_profile
+      union select line_no from transfer_door
+      union select line_no from exit_or_facility_door
+      ${
+        existingTables.has("station_congestion_profile")
+          ? "union select line_no from station_congestion_profile"
+          : ""
+      }
+      ${
+        existingTables.has("transfer_demand_profile")
+          ? "union select line_no from transfer_demand_profile"
+          : ""
+      }
+    )
+    select
+      lines.line_no as "lineNo",
+      coalesce(stations.row_count, 0)::text as "stationRows",
+      coalesce(raw_stations.row_count, 0)::text as "rawStationRows",
+      coalesce(ridership.row_count, 0)::text as "ridershipRows",
+      coalesce(layouts.row_count, 0)::text as "trainLayoutRows",
+      coalesce(congestion.row_count, 0)::text as "congestionRows",
+      coalesce(transfer_doors.row_count, 0)::text as "transferDoorRows",
+      coalesce(facility_doors.row_count, 0)::text as "facilityDoorRows",
+      coalesce(station_congestion.row_count, 0)::text as "stationCongestionRows",
+      coalesce(transfer_demand.row_count, 0)::text as "transferDemandRows"
+    from lines
+    left join (
+      select line_no, count(*) as row_count
+      from station_line_order
+      where ${lineTwoMainLoopStationSql("line_no")}
+      group by line_no
+    ) stations using (line_no)
+    left join (
+      select line_no, count(*) as row_count from station_line_order group by line_no
+    ) raw_stations using (line_no)
+    left join (
+      select line_no, count(*) as row_count from ridership_profile group by line_no
+    ) ridership using (line_no)
+    left join (
+      select line_no, count(*) as row_count from train_layout group by line_no
+    ) layouts using (line_no)
+    left join (
+      select line_no, count(*) as row_count from congestion_profile group by line_no
+    ) congestion using (line_no)
+    left join (
+      select line_no, count(*) as row_count from transfer_door group by line_no
+    ) transfer_doors using (line_no)
+    left join (
+      select line_no, count(*) as row_count from exit_or_facility_door group by line_no
+    ) facility_doors using (line_no)
+    left join (
+      ${
+        existingTables.has("station_congestion_profile")
+          ? "select line_no, count(*) as row_count from station_congestion_profile group by line_no"
+          : "select null::text as line_no, 0::bigint as row_count where false"
+      }
+    ) station_congestion using (line_no)
+    left join (
+      ${
+        existingTables.has("transfer_demand_profile")
+          ? "select line_no, count(*) as row_count from transfer_demand_profile group by line_no"
+          : "select null::text as line_no, 0::bigint as row_count where false"
+      }
+    ) transfer_demand using (line_no)
+    order by
+      case when lines.line_no ~ '^[0-9]+$' then lines.line_no::int else 999999 end,
+      lines.line_no
+  `);
+
+  return result.rows.map((row) => {
+    const transferDoorRows = Number(row.transferDoorRows);
+    const facilityDoorRows = Number(row.facilityDoorRows);
+    const coverage = {
+      lineNo: row.lineNo,
+      stationRows: Number(row.stationRows),
+      rawStationRows: Number(row.rawStationRows),
+      ridershipRows: Number(row.ridershipRows),
+      trainLayoutRows: Number(row.trainLayoutRows),
+      estimatedTrainLayout: Number(row.trainLayoutRows) <= 0 && hasFallbackTrainLayout(row.lineNo),
+      congestionRows: Number(row.congestionRows),
+      doorHintRows: transferDoorRows + facilityDoorRows,
+      stationCongestionRows: Number(row.stationCongestionRows),
+      transferDemandRows: Number(row.transferDemandRows),
+      missingRecommendationInputs: [],
+      qualityWarnings: [],
+      recommendable: false
+    };
+    const missingRecommendationInputs = missingRecommendationInputsForCoverage(coverage);
+    const qualityWarnings = qualityWarningsForCoverage(coverage);
+
+    return {
+      ...coverage,
+      missingRecommendationInputs,
+      qualityWarnings,
+      recommendable: missingRecommendationInputs.length === 0
+    };
+  });
+}
+
+function missingRecommendationInputsForCoverage(
+  coverage: Pick<LineDataCoverage, "lineNo" | "stationRows" | "ridershipRows" | "trainLayoutRows" | "estimatedTrainLayout" | "doorHintRows">
+) {
+  const missingInputs: string[] = [];
+  if (coverage.stationRows <= 1) {
+    missingInputs.push("station_order");
+  }
+  if (coverage.ridershipRows <= 0) {
+    missingInputs.push("ridership");
+  }
+  if (coverage.trainLayoutRows <= 0 && !coverage.estimatedTrainLayout) {
+    missingInputs.push("train_layout");
+  }
+  if (coverage.doorHintRows <= 0) {
+    missingInputs.push("door_hints");
+  }
+  return missingInputs;
+}
+
+function qualityWarningsForCoverage(
+  coverage: Pick<LineDataCoverage, "trainLayoutRows" | "estimatedTrainLayout" | "congestionRows">
+) {
+  const warnings: string[] = [];
+  if (coverage.trainLayoutRows <= 0 && coverage.estimatedTrainLayout) {
+    warnings.push("estimated_train_layout");
+  }
+  if (coverage.congestionRows <= 0) {
+    warnings.push("missing_congestion");
+  }
+  return warnings;
+}
+
 function isUndefinedTableError(error: unknown) {
   return (
     typeof error === "object" &&
@@ -514,6 +693,10 @@ function isUndefinedTableError(error: unknown) {
     "code" in error &&
     (error as { code?: unknown }).code === "42P01"
   );
+}
+
+function lineTwoMainLoopStationSql(lineNoExpression: string) {
+  return `${lineNoExpression} <> '2' or station_code ~ '^02(0[1-9]|[1-3][0-9]|4[0-3])$'`;
 }
 
 async function readLastIngestion(pool: Pool): Promise<DataStatus["lastIngestion"]> {
